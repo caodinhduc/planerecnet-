@@ -123,6 +123,7 @@ scannet_dataset = dataset_base.copy({
     # Evaluation images and annotations.
     'eval_images': '../scannet/filter_scans/',
     'eval_info':   'filter_scannet_eval.json',
+    
 
     # A list of names for each of you classes.
     'class_names': PLANE_CLASSES,
@@ -140,8 +141,8 @@ nyu_eval = dataset_base.copy({
     'name': 'NYUDataset',
 
     # Evaluation images and annotations.
-    'eval_images': './NYU/nyu_images/',
-    'eval_info': './NYU/nyu_eval.json',
+    'eval_images': '../nyuv2/nyu_images/',
+    'eval_info':   '../nyuv2/nyu_eval.json',
     # Resize scale factor
     'scale_factor': 1,
     'min_depth': 1/1000,
