@@ -19,7 +19,7 @@ from tensorboardX import SummaryWriter
 
 from planerecnet import PlaneRecNet
 from models.functions.funcs import bbox_iou, mask_iou
-from data.datasets import PlaneAnnoDataset, detection_collate, ScanNetDataset, NYUDataset
+from data.datasets import PlaneAnnoDataset, detection_collate, ScanNetDataset, NYUDataset, S2D3DSDataset
 from data.config import set_cfg, set_dataset, cfg, MEANS
 from data.augmentations import BaseTransform
 from utils.utils import MovingAverage, ProgressBar, SavePath

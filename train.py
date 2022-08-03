@@ -43,7 +43,7 @@ parser.add_argument('--start_iter', default=-1, type=int,
                          'determined from the file name.')
 parser.add_argument('--validation_size', default=2000, type=int,
                     help='The number of images to use for validation.')
-parser.add_argument('--validation_epoch', default=1, type=int,
+parser.add_argument('--validation_epoch', default=5, type=int,
                     help='Output validation information every n iterations. If -1, do no validation.')
 parser.add_argument('--no_tensorboard', dest='no_tensorboard', action='store_true',
                     help='Whether visualize training loss, validation loss and outputs with tensorboard.')

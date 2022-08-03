@@ -69,7 +69,7 @@ class PlaneAnnoDataset(data.Dataset):
         assert osp.exists(path), 'Image path does not exist: {}'.format(path)
 
         img = cv2.imread(path).astype(np.float32)
-        img = cv2.resize(img, (640, 480))
+        # img = cv2.resize(img, (640, 480))
         height, width, _ = img.shape
 
         depth_path = self.get_depth_path(file_name)
@@ -131,7 +131,7 @@ class PlaneAnnoDataset(data.Dataset):
         img_id = self.ids[index]
         path = self.coco.loadImgs(img_id)[0]['file_name']
         img = cv2.imread(osp.join(self.root, path), cv2.IMREAD_COLOR)
-        img = cv2.resize(img, (640, 480))
+        # img = cv2.resize(img, (640, 480))
         return img
     
     def pull_depth(self, index):
@@ -238,7 +238,7 @@ class S2D3DSDataset(PlaneAnnoDataset):
         depth_root = self.root.replace("images", "depths")
         depth_file_name = rgb_file_name.replace("rgb", "depth").replace(".jpg", ".png")
         depth_path = osp.join(depth_root, depth_file_name)
-        print(depth_path)
+        # print(depth_path)
         return depth_path
     
     def get_camera_matrix(self, rgb_file_name):
@@ -252,7 +252,7 @@ class S2D3DSDataset(PlaneAnnoDataset):
         return k_matrix
 
     def get_plane_para(self, target):
-        return [list(np.array([obj['plane_paras'][0], obj['plane_paras'][1], obj['plane_paras'][2], obj['plane_paras'][3], obj['plane_paras'][4], obj['plane_paras'][5]])) for obj in target]
+        return [list(np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0])) for obj in target]
 
 
 def detection_collate(batch):
