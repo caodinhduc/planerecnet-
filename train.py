@@ -159,7 +159,7 @@ class CustomDataParallel(nn.DataParallel):
     def scatter(self, inputs, kwargs, device_ids=[0]):
         # More like scatter and data prep at the same time. The point is we prep the data in such a way
         # that no scatter is necessary, and there's no need to shuffle stuff around different GPUs.
-        devices = ['cuda:' + str(x) for x in device_ids]
+        devices = ['cuda:0']
         splits = self.prepare_data(inputs[0], devices, allocation=args.batch_alloc)
 
         return [[split[0] for split in splits]], \
@@ -264,7 +264,7 @@ def train():
             exit(-1)
     
     net = CustomDataParallel(NetLoss(net, criterion))
-    net = net.cuda()
+    net = net.cuda(0)
 
     # Initialize everything
     if not cfg.freeze_bn: prn_net.freeze_bn() # Freeze bn so we don't kill our means
