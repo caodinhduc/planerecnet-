@@ -158,8 +158,8 @@ S2D3DS_dataset = dataset_base.copy({
     'name': 'S2D3DSDataset',
 
     # Training images and annotations
-    'train_images': '../../../data1/duccd/s2d3ds_plane_anno/pre/images_val/',
-    'train_info':   '../../../data1/duccd/s2d3ds_plane_anno/pre/s2d3ds_val.json',
+    'train_images': '../../../data1/duccd/s2d3ds_plane_anno/pre/images_train/',
+    'train_info':   '../../../data1/duccd/s2d3ds_plane_anno/pre/s2d3ds_train.json',
 
     # Validation images and annotations.
     'valid_images': '../../../data1/duccd/s2d3ds_plane_anno/pre/images_val/',
