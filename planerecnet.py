@@ -15,7 +15,7 @@ from models.fpn import FPN
 from models.backbone import construct_backbone
 from data.augmentations import FastBaseTransform
 
-torch.cuda.current_device()
+# torch.cuda.current_device()
 
 class PlaneRecNet(nn.Module):
     def __init__(self, cfg):
