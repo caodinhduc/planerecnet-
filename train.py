@@ -43,7 +43,7 @@ parser.add_argument('--start_iter', default=-1, type=int,
                          'determined from the file name.')
 parser.add_argument('--validation_size', default=2000, type=int,
                     help='The number of images to use for validation.')
-parser.add_argument('--validation_epoch', default=5, type=int,
+parser.add_argument('--validation_epoch', default=2, type=int,
                     help='Output validation information every n iterations. If -1, do no validation.')
 parser.add_argument('--no_tensorboard', dest='no_tensorboard', action='store_true',
                     help='Whether visualize training loss, validation loss and outputs with tensorboard.')
@@ -395,7 +395,7 @@ def train():
 
             # This is done per epoch
             if args.validation_epoch > 0:
-                if epoch % args.validation_epoch == 0 and iteration > 0 and epoch < num_epochs-2:
+                if epoch % args.validation_epoch == 0 and iteration > 0 and epoch < num_epochs-2 and epoch > 0:
                 # no validation when iteration = 0 or when last epoch
                     compute_validation_metrics(epoch, iteration, prn_net, val_dataset, args.validation_size)
         
