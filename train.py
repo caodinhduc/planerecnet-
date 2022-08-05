@@ -156,13 +156,13 @@ class CustomDataParallel(nn.DataParallel):
     It should also be faster than the general case.
     
     """
-    def scatter(self, inputs, kwargs, device_ids):
+    def scatter(self, inputs, kwargs, device_ids=[0]):
         # More like scatter and data prep at the same time. The point is we prep the data in such a way
         # that no scatter is necessary, and there's no need to shuffle stuff around different GPUs.
         devices = ['cuda:' + str(x) for x in device_ids]
         splits = self.prepare_data(inputs[0], devices, allocation=args.batch_alloc)
 
-        return [[split[device_idx] for split in splits] for device_idx in range(len(devices))], \
+        return [[split[0] for split in splits]], \
             [kwargs] * len(devices)
 
     def gather(self, outputs, output_device):
@@ -289,7 +289,7 @@ def train():
     # If Pytorch >= 1.9, please set the generator to utilize cuda to avoid crush.
     data_loader = torch.utils.data.DataLoader(dataset, args.batch_size,
                                   num_workers=args.num_workers,
-                                  generator=torch.Generator(device='cuda'),
+                                  generator=torch.Generator(device='cuda:0'),
                                   shuffle=True, collate_fn=detection_collate,
                                   pin_memory=True) # Add generator=torch.Generator(device='cuda') for pytorch >= 1.9
     
