@@ -159,7 +159,7 @@ class CustomDataParallel(nn.DataParallel):
     def scatter(self, inputs, kwargs, device_ids=[0]):
         # More like scatter and data prep at the same time. The point is we prep the data in such a way
         # that no scatter is necessary, and there's no need to shuffle stuff around different GPUs.
-        devices = ['cuda:0']
+        devices = ['cuda:{}'.format(device_ids[0])]
         splits = self.prepare_data(inputs[0], devices, allocation=args.batch_alloc)
 
         return [[split[0] for split in splits]], \
@@ -264,7 +264,7 @@ def train():
             exit(-1)
     
     net = CustomDataParallel(NetLoss(net, criterion))
-    net = net.cuda(0)
+    net = net.cuda()
 
     # Initialize everything
     if not cfg.freeze_bn: prn_net.freeze_bn() # Freeze bn so we don't kill our means
@@ -289,7 +289,7 @@ def train():
     # If Pytorch >= 1.9, please set the generator to utilize cuda to avoid crush.
     data_loader = torch.utils.data.DataLoader(dataset, args.batch_size,
                                   num_workers=args.num_workers,
-                                  generator=torch.Generator(device='cuda:0'),
+                                  generator=torch.Generator(device='cuda'),
                                   shuffle=True, collate_fn=detection_collate,
                                   pin_memory=True) # Add generator=torch.Generator(device='cuda') for pytorch >= 1.9
     
@@ -321,6 +321,7 @@ def train():
                 changed = False
                 for change in cfg.delayed_settings:
                     if iteration >= change[0]:
+                        print('changed')
                         changed = True
                         cfg.replace(change[1])
 
@@ -330,15 +331,18 @@ def train():
                 
                 # If a config setting was changed, remove it from the list so we don't keep checking
                 if changed:
+                    print('changed setting')
                     cfg.delayed_settings = [x for x in cfg.delayed_settings if x[0] > iteration]
 
                 # Warm up by linearly interpolating the learning rate from some smaller value
                 if cfg.lr_warmup_until > 0 and iteration <= cfg.lr_warmup_until:
+                    print('sert lr')
                     set_lr(optimizer, (args.lr - cfg.lr_warmup_init) * (iteration / cfg.lr_warmup_until) + cfg.lr_warmup_init)
 
                 # Adjust the learning rate at the given iterations, but also if we resume from past that iteration
                 while step_index < len(cfg.lr_steps) and iteration >= cfg.lr_steps[step_index]:
                     step_index += 1
+                    print('sert lr step_index')
                     set_lr(optimizer, args.lr * (args.gamma ** step_index))
                 
                 # Zero the grad to get ready to compute gradients
