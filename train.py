@@ -305,6 +305,7 @@ def train():
     try:
         for epoch in range(num_epochs):
             # Resume from start_iter
+            print('training with epoch {}'.format(epoch))
             if (epoch+1)*epoch_size < iteration:
                 continue
             
@@ -312,7 +313,7 @@ def train():
                 # Stop if we've reached an epoch if we're resuming from start_iter
                 if iteration == (epoch+1)*epoch_size:
                     break
-                if iteration == 200:
+                if iteration % 200 == 0:
                     iteration += 1
                     break
 
