@@ -317,7 +317,6 @@ def train():
                     break
                 # set the limit
                 if idx == 8000:
-                    iteration += 1
                     break
 
                 # Stop at the configured number of iterations even if mid-epoch
