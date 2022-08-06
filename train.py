@@ -156,7 +156,7 @@ class CustomDataParallel(nn.DataParallel):
     It should also be faster than the general case.
     
     """
-    def scatter(self, inputs, kwargs, device_ids=[1]):
+    def scatter(self, inputs, kwargs, device_ids=[0]):
         # More like scatter and data prep at the same time. The point is we prep the data in such a way
         # that no scatter is necessary, and there's no need to shuffle stuff around different GPUs.
         devices = ['cuda:{}'.format(device_ids[0])]
@@ -309,13 +309,16 @@ def train():
             if (epoch+1)*epoch_size < iteration:
                 continue
             
+            idx = 0
             for datum in data_loader:
+                idx += 1
                 # Stop if we've reached an epoch if we're resuming from start_iter
                 if iteration == (epoch+1)*epoch_size:
                     break
-                # if iteration % 200 == 0:
-                #     iteration += 1
-                #     break
+                # set the limit
+                if idx == 8000:
+                    iteration += 1
+                    break
 
                 # Stop at the configured number of iterations even if mid-epoch
                 if iteration == cfg.max_iter:
