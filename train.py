@@ -315,9 +315,6 @@ def train():
                 # Stop if we've reached an epoch if we're resuming from start_iter
                 if iteration == (epoch+1)*epoch_size:
                     break
-                # set the limit
-                if idx == 8000:
-                    break
 
                 # Stop at the configured number of iterations even if mid-epoch
                 if iteration == cfg.max_iter:
