@@ -4,6 +4,7 @@
 """
 
 import cv2
+from cv2 import merge
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -14,6 +15,7 @@ from models.functions.funcs import bias_init_with_prob
 from models.fpn import FPN
 from models.backbone import construct_backbone
 from data.augmentations import FastBaseTransform
+from cbam import CBAM
 
 torch.cuda.current_device()
 
@@ -61,6 +63,7 @@ class PlaneRecNet(nn.Module):
 
         # build depth decoder
         self.depth_decoder = DepthDecoder_FPN()
+        self.depth_final = Depth_Pred()
 
         # build the ins head.
         instance_shapes = [cfg.fpn.num_features for _ in range(len(cfg.solov2.instance_in_features))]
@@ -81,6 +84,12 @@ class PlaneRecNet(nn.Module):
         with timer.env("fpn"):
             features = self.fpn([features_encoder[i] for i in self.fpn_indices])
         
+        # Depth Decoding
+        with timer.env("depth_decoder"):
+            depth_hidden = self.depth_decoder([features_encoder[i] for i in self.depth_decoder_indices], features)
+            depth_pred = self.depth_final(depth_hidden)
+        
+        
         # Instance Branch
         with timer.env("instance head"):
             ins_features = [features[f] for f in range(len(self.instance_in_features))]
@@ -90,11 +99,9 @@ class PlaneRecNet(nn.Module):
         # Mask Branch
         with timer.env('mask head'):
             mask_features = [features[f] for f in range(len(self.mask_in_features))]
-            mask_pred = self.mask_head(mask_features)
+            mask_pred = self.mask_head(mask_features, depth_hidden)
         
-                # Depth Decoding
-        with timer.env("depth_decoder"):
-            depth_pred = self.depth_decoder([features_encoder[i] for i in self.depth_decoder_indices], mask_pred, kernel_pred)
+
 
         # Inference or output for trainng
         with timer.env('Inferencing'):
@@ -457,14 +464,26 @@ class SOLOv2MaskHead(nn.Module):
 
         self.conv_pred = nn.Sequential(
             nn.Conv2d(
-                self.mask_channels, self.num_masks,
+                self.mask_channels, 64,
                 kernel_size=1, stride=1,
                 padding=0, bias=norm is None),
-            nn.GroupNorm(32, self.num_masks),
+            nn.GroupNorm(32, 64),
             nn.ReLU(inplace=True)
         )
+        
+        self.final_conv = nn.Sequential(
+            nn.Conv2d(
+                128, 128,
+                kernel_size=1, stride=1,
+                padding=0, bias=norm is None),
+            nn.GroupNorm(32, 128),
+            nn.ReLU(inplace=True)
+        )
+        
+        # combine depth and segmentation features
+        self.cbam = CBAM(128, 128)
 
-    def forward(self, features):
+    def forward(self, features, depth_features):
         """
         Arguments:
             features (list[Tensor]): FPN feature map tensors in high to low resolution.
@@ -491,11 +510,14 @@ class SOLOv2MaskHead(nn.Module):
             # add for top features.
             # feature_add_all_level += self.convs_all_levels[i](mask_feat)  # This inplace operation may cause RuntimeError for pytorch >= 1.10
             feature_add_all_level = feature_add_all_level.clone() + self.convs_all_levels[i](mask_feat) 
-
-        mask_pred = self.conv_pred(feature_add_all_level)
+        
+        depth_features = F.interpolate(depth_features, scale_factor=0.5, mode='bilinear', align_corners=False, recompute_scale_factor=False)
+        mask_before_merge = self.conv_pred(feature_add_all_level)
+        merge_features = self.cbam(torch.cat([mask_before_merge, depth_features], dim=1))
+        mask_pred = self.final_conv(merge_features)
         return mask_pred
-
-
+    
+    
 class DepthDecoder_FPN(nn.Module):
 
     def __init__(self):
@@ -507,10 +529,10 @@ class DepthDecoder_FPN(nn.Module):
         for i in cfg.solov2.num_grids:
             self.channels_kernels_flatten += i*i
 
-        self.latlayer1 = nn.Conv2d(2048, 256, kernel_size=1, stride=1, padding=0)
-        self.latlayer2 = nn.Conv2d(1024, 256, kernel_size=1, stride=1, padding=0)
-        self.latlayer3 = nn.Conv2d( 512, 256, kernel_size=1, stride=1, padding=0)
-        self.latlayer4 = nn.Conv2d( 256, 256, kernel_size=1, stride=1, padding=0)
+        self.latlayer1 = nn.Conv2d(2048 + 256, 256, kernel_size=1, stride=1, padding=0)
+        self.latlayer2 = nn.Conv2d(1024 + 256, 256, kernel_size=1, stride=1, padding=0)
+        self.latlayer3 = nn.Conv2d( 512 + 256, 256, kernel_size=1, stride=1, padding=0)
+        self.latlayer4 = nn.Conv2d( 256 + 256, 256, kernel_size=1, stride=1, padding=0)
 
         self.conv1 = nn.Sequential(
             nn.ReflectionPad2d(1),
@@ -540,8 +562,8 @@ class DepthDecoder_FPN(nn.Module):
         self.deconv1 = nn.Sequential(
             torch.nn.Upsample(scale_factor=2, mode='nearest', align_corners=None),
             nn.ReflectionPad2d(1),
-            nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=0),
-            nn.BatchNorm2d(256, eps=0.001, momentum=0.01),
+            nn.Conv2d(256, 128, kernel_size=3, stride=1, padding=0),
+            nn.BatchNorm2d(128, eps=0.001, momentum=0.01),
             nn.ReLU(inplace=True)
         )
         self.deconv2 = nn.Sequential(
@@ -583,29 +605,39 @@ class DepthDecoder_FPN(nn.Module):
             nn.ReLU(inplace=True)
         )
 
-    def forward(self, feature_maps, seg_preds, kernel_preds):
-        num_ins_levels = len(kernel_preds)
-        B = feature_maps[0].shape[0]
-        flatten_kernel = torch.cat([kernel_preds[i].permute(0, 2, 3, 1).view(B, -1, self.num_kernels) for i in range(num_ins_levels)], dim=1).detach()
-        _, N, I = flatten_kernel.shape
-        flatten_kernel = flatten_kernel.view(-1, N, I, 1, 1)
-        mask_preds = torch.cat([F.conv2d(seg_preds[img_idx].unsqueeze(0).detach(), flatten_kernel[img_idx], stride=1) for img_idx in range(B)], dim=0).sigmoid().detach()
-        mask_preds = self.conv1x1(mask_preds)
-        mask_preds = F.interpolate(mask_preds, scale_factor=0.25, mode='bilinear', align_corners=False, recompute_scale_factor=False)
+    def forward(self, feature_maps, FPN_features):
+        # mask_preds = F.interpolate(mask_preds, scale_factor=0.25, mode='bilinear', align_corners=False, recompute_scale_factor=False)
         feats = list(reversed(feature_maps))
+        fpn_feats = list(reversed(FPN_features))
         
+        x = self.deconv1(self.conv1(self.latlayer1(torch.cat([feats[0], fpn_feats[0]], dim=1))))
         
-        x = self.deconv1(self.conv1(self.latlayer1(feats[0])))
-        
-        x = self.refine_conv(torch.cat([x, torch.mul(x, mask_preds)], dim=1))
-
-        x = self.deconv2(torch.cat([self.conv2(self.latlayer2(feats[1])), x], dim=1))
-        x = self.deconv3(torch.cat([self.conv3(self.latlayer3(feats[2])), x], dim=1))
-        x = self.deconv4(torch.cat([self.conv4(self.latlayer4(feats[3])), x], dim=1))
-        x = self.depth_pred(x)
+        # x = self.refine_conv(torch.cat([x, torch.mul(x, mask_preds)], dim=1))
+        x = self.deconv2(torch.cat([self.conv2(self.latlayer2(torch.cat([feats[1], fpn_feats[1]], dim=1))), x], dim=1))
+        x = self.deconv3(torch.cat([self.conv3(self.latlayer3(torch.cat([feats[2], fpn_feats[2]], dim=1))), x], dim=1))
+        x = self.deconv4(torch.cat([self.conv4(self.latlayer4(torch.cat([feats[3], fpn_feats[3]], dim=1))), x], dim=1))
+        # 1 64 320 320
+        # x = self.depth_pred(x)
 
         return x
 
+class Depth_Pred(nn.Module):
+
+    def __init__(self):
+        super(Depth_Pred, self).__init__()
+
+        self.num_output_channels = 1
+        
+        self.depth_pred = nn.Sequential(
+            nn.ReflectionPad2d(1),
+            nn.Conv2d(64, self.num_output_channels, kernel_size=3, stride=1, padding=0),
+            nn.Softplus()
+        )
+
+    def forward(self, x):
+        x = self.depth_pred(x)
+
+        return x
 
 if __name__ == "__main__":
     import argparse

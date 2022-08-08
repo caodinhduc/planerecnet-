@@ -162,7 +162,7 @@ class CustomDataParallel(nn.DataParallel):
         devices = ['cuda:{}'.format(device_ids[0])]
         splits = self.prepare_data(inputs[0], devices, allocation=args.batch_alloc)
 
-        return [[split[0] for split in splits]], \
+        return [[split[device_idx] for split in splits] for device_idx in range(len(devices))], \
             [kwargs] * len(devices)
 
     def gather(self, outputs, output_device):
@@ -315,10 +315,6 @@ def train():
                 # Stop if we've reached an epoch if we're resuming from start_iter
                 if iteration == (epoch+1)*epoch_size:
                     break
-                # set the limit
-                if idx == 8000:
-                    break
-
                 # Stop at the configured number of iterations even if mid-epoch
                 if iteration == cfg.max_iter:
                     break
@@ -327,7 +323,6 @@ def train():
                 changed = False
                 for change in cfg.delayed_settings:
                     if iteration >= change[0]:
-                        print('changed')
                         changed = True
                         cfg.replace(change[1])
 
@@ -337,7 +332,6 @@ def train():
                 
                 # If a config setting was changed, remove it from the list so we don't keep checking
                 if changed:
-                    print('changed setting')
                     cfg.delayed_settings = [x for x in cfg.delayed_settings if x[0] > iteration]
 
                 # Warm up by linearly interpolating the learning rate from some smaller value
@@ -348,7 +342,6 @@ def train():
                 # Adjust the learning rate at the given iterations, but also if we resume from past that iteration
                 while step_index < len(cfg.lr_steps) and iteration >= cfg.lr_steps[step_index]:
                     step_index += 1
-                    print('sert lr step_index')
                     set_lr(optimizer, args.lr * (args.gamma ** step_index))
                 
                 # Zero the grad to get ready to compute gradients
