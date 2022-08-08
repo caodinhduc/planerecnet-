@@ -156,13 +156,13 @@ class CustomDataParallel(nn.DataParallel):
     It should also be faster than the general case.
     
     """
-    def scatter(self, inputs, kwargs, device_ids=[1]):
+    def scatter(self, inputs, kwargs, device_ids=[0]):
         # More like scatter and data prep at the same time. The point is we prep the data in such a way
         # that no scatter is necessary, and there's no need to shuffle stuff around different GPUs.
         devices = ['cuda:{}'.format(device_ids[0])]
         splits = self.prepare_data(inputs[0], devices, allocation=args.batch_alloc)
 
-        return [[split[0] for split in splits]], \
+        return [[split[device_idx] for split in splits] for device_idx in range(len(devices))], \
             [kwargs] * len(devices)
 
     def gather(self, outputs, output_device):
