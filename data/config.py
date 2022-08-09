@@ -166,8 +166,23 @@ S2D3DS_dataset = dataset_base.copy({
     'valid_images': '../../../data1/duccd/s2d3ds_plane_anno/pre/images_val/',
     'valid_info':   '../../../data1/duccd/s2d3ds_plane_anno/pre/s2d3ds_val.json',
     
-    'eval_images': '../../../data1/duccd/s2d3ds_plane_anno/pre/images_val/',
-    'eval_info':   '../../../data1/duccd/s2d3ds_plane_anno/pre/s2d3ds_val.json',
+    # 'eval_images': '../../../data1/duccd/s2d3ds_plane_anno/pre/images_val/',
+    # 'eval_info':   '../../../data1/duccd/s2d3ds_plane_anno/pre/s2d3ds_val.json',
+    
+        # 'eval_images': '../../../data1/duccd/s2d3ds_plane_anno/pre/images_val/',
+    # 'eval_info':   '../../../data1/duccd/s2d3ds_plane_anno/pre/s2d3ds_val.json',
+    
+    #     # Training images and annotations
+    # 'train_images': '../stanford/s2d3ds_plane_anno/pre/images/',
+    # 'train_info':   '../stanford/s2d3ds_plane_anno/pre/s2d3ds_train.json',
+    # # 'train_info':   'stanford_20000.json',
+
+    # # Validation images and annotations.
+    # 'valid_images': '../stanford/data1/s2d3ds_plane_anno/pre/images_val/',
+    # 'valid_info':   '../stanford/s2d3ds_plane_anno/pre/s2d3ds_val.json',
+    
+    'eval_images': '../stanford/s2d3ds_plane_anno/pre/images_val/',
+    'eval_info':   'val_500.json',
 
     # The ratio to convert depth pixel value to meter
     'depth_resolution': 1/512,
