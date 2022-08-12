@@ -461,19 +461,10 @@ class SOLOv2MaskHead(nn.Module):
                 convs_per_level.add_module('upsample' + str(j), upsample_tower)
 
             self.convs_all_levels.append(convs_per_level)
-
+        
         self.conv_pred = nn.Sequential(
             nn.Conv2d(
-                self.mask_channels, 64,
-                kernel_size=1, stride=1,
-                padding=0, bias=norm is None),
-            nn.GroupNorm(32, 64),
-            nn.ReLU(inplace=True)
-        )
-        
-        self.final_conv = nn.Sequential(
-            nn.Conv2d(
-                128, 128,
+                256, 128,
                 kernel_size=1, stride=1,
                 padding=0, bias=norm is None),
             nn.GroupNorm(32, 128),
@@ -481,7 +472,10 @@ class SOLOv2MaskHead(nn.Module):
         )
         
         # combine depth and segmentation features
-        self.cbam = CBAM(128, 128)
+        self.cbam = CBAM(128)
+        self.conv1x1 = nn.Sequential(
+            nn.Conv2d(128, 128, kernel_size=1, stride=1, padding=0)
+            )
 
     def forward(self, features, depth_features):
         """
@@ -512,9 +506,9 @@ class SOLOv2MaskHead(nn.Module):
             feature_add_all_level = feature_add_all_level.clone() + self.convs_all_levels[i](mask_feat) 
         
         depth_features = F.interpolate(depth_features, scale_factor=0.5, mode='bilinear', align_corners=False, recompute_scale_factor=False)
-        mask_before_merge = self.conv_pred(feature_add_all_level)
-        merge_features = self.cbam(torch.cat([mask_before_merge, depth_features], dim=1))
-        mask_pred = self.final_conv(merge_features)
+        # depth_features = self.conv1x1(depth_features)
+        depth_features = self.cbam(depth_features)
+        mask_pred = self.conv_pred(torch.cat([depth_features, feature_add_all_level], dim=1))
         return mask_pred
     
     
@@ -583,27 +577,11 @@ class DepthDecoder_FPN(nn.Module):
         self.deconv4 = nn.Sequential(
             torch.nn.Upsample(scale_factor=2, mode='nearest', align_corners=None),
             nn.ReflectionPad2d(1),
-            nn.Conv2d(256, 64, kernel_size=3, stride=1, padding=0),
-            nn.BatchNorm2d(64, eps=0.001, momentum=0.01),
-            nn.ReLU(inplace=True)
-        )
-        
-        self.depth_pred = nn.Sequential(
-            nn.ReflectionPad2d(1),
-            nn.Conv2d(64, self.num_output_channels, kernel_size=3, stride=1, padding=0),
-            nn.Softplus()
-        )
-        
-        self.conv1x1 = nn.Sequential(
-            nn.Conv2d(self.channels_kernels_flatten, 256, kernel_size=1, stride=1, padding=0)
-            )
-
-        self.refine_conv = nn.Sequential(
-            nn.ReflectionPad2d(1),
-            nn.Conv2d(512, 128, kernel_size=3, stride=1, padding=0),
+            nn.Conv2d(256, 128, kernel_size=3, stride=1, padding=0),
             nn.BatchNorm2d(128, eps=0.001, momentum=0.01),
             nn.ReLU(inplace=True)
         )
+        
 
     def forward(self, feature_maps, FPN_features):
         # mask_preds = F.interpolate(mask_preds, scale_factor=0.25, mode='bilinear', align_corners=False, recompute_scale_factor=False)
@@ -627,6 +605,12 @@ class Depth_Pred(nn.Module):
         super(Depth_Pred, self).__init__()
 
         self.num_output_channels = 1
+        self.deconv5 = nn.Sequential(
+            nn.ReflectionPad2d(1),
+            nn.Conv2d(128, 64, kernel_size=3, stride=1, padding=0),
+            nn.BatchNorm2d(64, eps=0.001, momentum=0.01),
+            nn.ReLU(inplace=True)
+        )
         
         self.depth_pred = nn.Sequential(
             nn.ReflectionPad2d(1),
@@ -635,6 +619,7 @@ class Depth_Pred(nn.Module):
         )
 
     def forward(self, x):
+        x = self.deconv5(x)
         x = self.depth_pred(x)
 
         return x
