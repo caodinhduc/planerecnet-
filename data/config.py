@@ -114,15 +114,15 @@ scannet_dataset = dataset_base.copy({
 
     # Training images and annotations
     'train_images': '../../../data1/duccd/used_filter_scans/',
-    'train_info':   '../../../data1/duccd/used_filter_scans/filter_scannet_train.json',
+    'train_info':   '../../../data1/duccd/filter_scannet_train.json',
 
     # Validation images and annotations.
     'valid_images': '../../../data1/duccd/used_filter_scans/',
-    'valid_info':   '../../../data1/duccd/used_filter_scans/filter_scannet_val.json',
+    'valid_info':   '../../../data1/duccd/filter_scannet_val.json',
 
     # Evaluation images and annotations.
     'eval_images': '../../../data1/duccd/used_filter_scans/',
-    'eval_info':   '../../../data1/duccd/used_filter_scans/filter_scannet_eval.json',
+    'eval_info':   '../../../data1/duccd/filter_scannet_eval.json',
 
     # # Training images and annotations
     # 'train_images': '../scannet/used_filter_scans/',
