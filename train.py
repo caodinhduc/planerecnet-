@@ -251,9 +251,11 @@ def train():
     optimizer = optim.Adam([
         {'params': net.backbone.parameters(), 'lr': 5*args.lr},
         {'params': net.fpn.parameters(), 'lr': args.lr},
-        {'params': net.inst_head.parameters(), 'lr': args.lr},
-        {'params': net.mask_head.parameters(), 'lr': args.lr},
-        {'params': net.depth_decoder.parameters(), 'lr': 2*args.lr}], lr=args.lr)
+        {'params': net.inst_head.parameters(), 'lr': 2*args.lr},
+        {'params': net.seg_aggregator.parameters(), 'lr': args.lr},
+        {'params': net.mask_head.parameters(), 'lr': 2*args.lr},
+        {'params': net.depth_aggregator.parameters(), 'lr': args.lr},
+        {'params': net.depth_final.parameters(), 'lr': 2*args.lr}], lr=args.lr)
     
     criterion = PlaneRecNetLoss()
 

@@ -169,19 +169,19 @@ S2D3DS_dataset = dataset_base.copy({
     'eval_images': '../../../data1/duccd/s2d3ds_plane_anno/pre/images_val/',
     'eval_info':   '../../../data1/duccd/s2d3ds_plane_anno/pre/s2d3ds_val.json',
     
-        # 'eval_images': '../../../data1/duccd/s2d3ds_plane_anno/pre/images_val/',
+    # 'eval_images': '../../../data1/duccd/s2d3ds_plane_anno/pre/images_val/',
     # 'eval_info':   '../../../data1/duccd/s2d3ds_plane_anno/pre/s2d3ds_val.json',
     
     # 'train_images': '../stanford/s2d3ds_plane_anno/pre/images/',
-    # 'train_info':   '../stanford/s2d3ds_plane_anno/pre/s2d3ds_train.json',
+    # 'train_info':   'merged_set1_set2.json',
     # # 'train_info':   'stanford_20000.json',
 
     # # # Validation images and annotations.
     # 'valid_images': '../stanford/s2d3ds_plane_anno/pre/images_val/',
-    # 'valid_info':   'val_500.json',
+    # 'valid_info':   'val_800.json',
     
     # 'eval_images': '../stanford/s2d3ds_plane_anno/pre/images_val/',
-    # 'eval_info':   'val_500.json',
+    # 'eval_info':   'val_800.json',
     #  'eval_info':   'filter_s2d3ds_val.json',
 
     # The ratio to convert depth pixel value to meter
@@ -478,7 +478,7 @@ PlaneRecNet_base_config = Config(
         # Loss Settings
         'dice_weight': 3.0,
         'focal_weight': 1.0,
-        'depth_weight': 5.0,
+        'depth_weight': 3.0,
         'use_lava_loss': False,
         'use_plane_loss': False,
 
