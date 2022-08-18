@@ -47,8 +47,8 @@ class PlaneRecNetLoss(nn.Module):
         self.conf_loss = SigmoidFocalLoss(gamma=self.focal_loss_gamma, alpha=self.focal_loss_alpha, reduction="sum")
         self.point_wise_depth_loss = RMSElogLoss(reduction="mean")
         self.depth_constraint_inst_loss = LavaLoss()
-        # self.vnl = VNL_Loss((480,640))
-        self.vnl = VNL_Loss((640,640))
+        self.vnl = VNL_Loss((480,640))
+        # self.vnl = VNL_Loss((640,640))
         
 
     def forward(self, net, mask_preds, cate_preds, kernel_preds, depth_preds, gt_instances, gt_depths):
