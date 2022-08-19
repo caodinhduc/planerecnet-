@@ -120,8 +120,8 @@ scannet_dataset = dataset_base.copy({
     'valid_info':   '../../../data1/duccd/filter_scannet_val.json',
 
     # Evaluation images and annotations.
-    'eval_images': '../../../data1/duccd/used_filter_scans/',
-    'eval_info':   '../../../data1/duccd/filter_scannet_eval.json',
+    # 'eval_images': '../../../data1/duccd/used_filter_scans/',
+    # 'eval_info':   '../../../data1/duccd/filter_scannet_eval.json',
 
     # # Training images and annotations
     # 'train_images': '../scannet/filter_scans/',
@@ -131,9 +131,9 @@ scannet_dataset = dataset_base.copy({
     # 'valid_images': '../scannet/filter_scans/',
     # 'valid_info':   'filter_scannet_val.json',
 
-    # # Evaluation images and annotations.
-    # 'eval_images': '../scannet/filter_scans/',
-    # 'eval_info':   'filter_scannet_eval.json',
+    # Evaluation images and annotations.
+    'eval_images': '../scannet/filter_scans/',
+    'eval_info':   'filter_scannet_eval.json',
     
 
     # A list of names for each of you classes.
