@@ -168,14 +168,14 @@ S2D3DS_dataset = dataset_base.copy({
     'eval_images': '../../../data1/duccd/s2d3ds_plane_anno/pre/images_val/',
     'eval_info':   '../../../data1/duccd/s2d3ds_plane_anno/pre/s2d3ds_val.json',
     
-    #     # Training images and annotations
+    # Training images and annotations
     # 'train_images': '../stanford/s2d3ds_plane_anno/pre/images/',
-    # 'train_info':   '../stanford/s2d3ds_plane_anno/pre/s2d3ds_train.json',
-    # # 'train_info':   'stanford_20000.json',
+    # # 'train_info':   '../stanford/s2d3ds_plane_anno/pre/s2d3ds_train.json',
+    # 'train_info':   'finetune_train.json',
 
     # # # Validation images and annotations.
-    # 'eval_images': '../stanford/s2d3ds_plane_anno/pre/images_val/',
-    # 'eval_info':   'filter_s2d3ds_val.json',
+    # 'valid_images': '../stanford/s2d3ds_plane_anno/pre/images_val/',
+    # 'valid_info':   'val_800.json',
     
     # 'eval_images': '../stanford/s2d3ds_plane_anno/pre/images_val/',
     # 'eval_info':   'val_800.json',
