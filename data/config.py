@@ -132,8 +132,8 @@ scannet_dataset = dataset_base.copy({
     # 'valid_info':   'filter_scannet_val.json',
 
     # Evaluation images and annotations.
-    # 'eval_images': '../scannet/filter_scans/',
-    # 'eval_info':   'filter_scannet_eval.json',
+    # 'eval_images': '../scannet/official/',
+    # 'eval_info':   'scannet_eval.json',
     
 
     # A list of names for each of you classes.
