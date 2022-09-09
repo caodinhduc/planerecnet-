@@ -489,7 +489,7 @@ PlaneRecNet_base_config = Config(
         # Loss Settings
         'dice_weight': 3.0,
         'focal_weight': 1.0,
-        'depth_weight': 3.0,
+        'depth_weight': 4.0,
         'use_lava_loss': False,
         'use_plane_loss': False,
 
