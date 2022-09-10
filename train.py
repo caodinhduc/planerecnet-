@@ -248,7 +248,7 @@ def train():
         print('Initializing weights...')
         prn_net.init_weights(backbone_path=args.backbone_folder + cfg.backbone.path)
     
-    optimizer = optim.SGD([
+    optimizer = optim.Adam([
         {'params': net.backbone.parameters(), 'lr': 5*args.lr},
         {'params': net.fpn.parameters(), 'lr': args.lr},
         {'params': net.inst_head.parameters(), 'lr': 2*args.lr},
