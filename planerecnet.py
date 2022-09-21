@@ -16,6 +16,7 @@ from models.fpn import FPN
 from models.backbone import construct_backbone
 from data.augmentations import FastBaseTransform
 from cbam import CBAM
+from aspp import ASPP
 
 torch.cuda.current_device()
 
@@ -530,7 +531,7 @@ class SOLOv2MaskHead(nn.Module):
         
     def forward(self, x, depth_features):
         depth_features = F.interpolate(depth_features, scale_factor=0.5, mode='bilinear', align_corners=False, recompute_scale_factor=False)
-        depth_features = self.conv1x1(self.cbam(depth_features))
+        depth_features = self.cbam(self.conv1x1(depth_features))
         x = torch.cat([x, depth_features], dim=1)
         mask_pred = self.conv_pred(x)
         return mask_pred
@@ -580,8 +581,8 @@ class DepthAggregator_FPN(nn.Module):
         self.deconv1 = nn.Sequential(
             torch.nn.Upsample(scale_factor=2, mode='nearest', align_corners=None),
             nn.ReflectionPad2d(1),
-            nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=0),
-            nn.BatchNorm2d(256, eps=0.001, momentum=0.01),
+            nn.Conv2d(256, 128, kernel_size=3, stride=1, padding=0),
+            nn.BatchNorm2d(128, eps=0.001, momentum=0.01),
             nn.ReLU(inplace=True)
         )
         self.deconv2 = nn.Sequential(
@@ -605,24 +606,15 @@ class DepthAggregator_FPN(nn.Module):
             nn.BatchNorm2d(128, eps=0.001, momentum=0.01),
             nn.ReLU(inplace=True)
         )
-
-        self.refine_conv = nn.Sequential(
-            nn.ReflectionPad2d(1),
-            nn.Conv2d(256, 128, kernel_size=3, stride=1, padding=0),
-            nn.BatchNorm2d(128, eps=0.001, momentum=0.01),
-            nn.ReLU(inplace=True)
-        )
+        self.aspp = ASPP(in_channels=2048, atrous_rates=[3, 6, 12])
 
     def forward(self, feature_maps):
         
         feats = list(reversed(feature_maps))
-        x = self.deconv1(self.conv1(self.latlayer1(feats[0])))    
-        x = self.refine_conv(x)
-
+        x = self.deconv1(self.conv1(self.latlayer1(self.aspp(feats[0]))))    
         x = self.deconv2(torch.cat([self.conv2(self.latlayer2(feats[1])), x], dim=1))
         x = self.deconv3(torch.cat([self.conv3(self.latlayer3(feats[2])), x], dim=1))
         x = self.deconv4(torch.cat([self.conv4(self.latlayer4(feats[3])), x], dim=1))
-
         return x
 
 class Depth_Pred(nn.Module):
@@ -656,7 +648,7 @@ class Depth_Pred(nn.Module):
         
     def forward(self, x, mask_features):
         mask_features = F.interpolate(mask_features, scale_factor=2, mode='bilinear', align_corners=False, recompute_scale_factor=False)
-        mask_features = self.conv1x1(self.cbam(mask_features))
+        mask_features = self.cbam(self.conv1x1(mask_features))
         x = self.deconv(torch.cat([x, mask_features], dim=1))
         x = self.depth_pred(x)
 
