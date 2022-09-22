@@ -16,7 +16,6 @@ from models.fpn import FPN
 from models.backbone import construct_backbone
 from data.augmentations import FastBaseTransform
 from cbam import CBAM
-from aspp import ASPP
 
 torch.cuda.current_device()
 
@@ -606,12 +605,11 @@ class DepthAggregator_FPN(nn.Module):
             nn.BatchNorm2d(128, eps=0.001, momentum=0.01),
             nn.ReLU(inplace=True)
         )
-        self.aspp = ASPP(in_channels=2048, atrous_rates=[3, 6, 12])
 
     def forward(self, feature_maps):
         
         feats = list(reversed(feature_maps))
-        x = self.deconv1(self.conv1(self.latlayer1(self.aspp(feats[0]))))    
+        x = self.deconv1(self.conv1(self.latlayer1(feats[0]))) 
         x = self.deconv2(torch.cat([self.conv2(self.latlayer2(feats[1])), x], dim=1))
         x = self.deconv3(torch.cat([self.conv3(self.latlayer3(feats[2])), x], dim=1))
         x = self.deconv4(torch.cat([self.conv4(self.latlayer4(feats[3])), x], dim=1))
