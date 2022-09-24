@@ -15,7 +15,7 @@ from models.functions.funcs import bias_init_with_prob
 from models.fpn import FPN
 from models.backbone import construct_backbone
 from data.augmentations import FastBaseTransform
-from SABlock import SABlock
+from attention import SABlock
 
 torch.cuda.current_device()
 
