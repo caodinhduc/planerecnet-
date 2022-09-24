@@ -510,7 +510,7 @@ class SOLOv2MaskHead(nn.Module):
         self.conv_pred = nn.Sequential(
             nn.ReflectionPad2d(1),
             nn.Conv2d(
-                128, 128,
+                256, 128,
                 kernel_size=3, stride=1,
                 padding=0),
             nn.GroupNorm(32, 128),
@@ -531,7 +531,7 @@ class SOLOv2MaskHead(nn.Module):
     def forward(self, x, depth_features):
         depth_features = F.interpolate(depth_features, scale_factor=0.5, mode='bilinear', align_corners=False, recompute_scale_factor=False)
         depth_features = self.sablock(self.conv1x1(depth_features))
-        mask_pred = self.conv_pred(x + depth_features)
+        mask_pred = self.conv_pred(torch.cat([x, depth_features], dim=1))
         return mask_pred
 
 
@@ -623,7 +623,7 @@ class Depth_Pred(nn.Module):
         self.deconv = nn.Sequential(
             
             nn.ReflectionPad2d(1),
-            nn.Conv2d(128, 128, kernel_size=3, stride=1, padding=0),
+            nn.Conv2d(256, 128, kernel_size=3, stride=1, padding=0),
             nn.BatchNorm2d(128, eps=0.001, momentum=0.01),
             nn.ReLU(inplace=True),
             
@@ -646,7 +646,7 @@ class Depth_Pred(nn.Module):
     def forward(self, x, mask_features):
         mask_features = F.interpolate(mask_features, scale_factor=2, mode='bilinear', align_corners=False, recompute_scale_factor=False)
         mask_features = self.sablock(self.conv1x1(mask_features))
-        x = self.deconv(x + mask_features)
+        x = self.deconv(torch.cat([x, mask_features], dim=1))
         x = self.depth_pred(x)
 
         return x
