@@ -15,7 +15,7 @@ from models.functions.funcs import bias_init_with_prob
 from models.fpn import FPN
 from models.backbone import construct_backbone
 from data.augmentations import FastBaseTransform
-from cbam import CBAM
+from SABlock import SABlock
 
 torch.cuda.current_device()
 
@@ -510,29 +510,28 @@ class SOLOv2MaskHead(nn.Module):
         self.conv_pred = nn.Sequential(
             nn.ReflectionPad2d(1),
             nn.Conv2d(
-                256, 256,
+                128, 128,
                 kernel_size=3, stride=1,
                 padding=0),
-            nn.GroupNorm(32, 256),
+            nn.GroupNorm(32, 128),
             nn.ReLU(inplace=True),
             
             nn.Conv2d(
-                256, self.num_masks,
+                128, self.num_masks,
                 kernel_size=1, stride=1,
                 padding=0, bias=norm is None),
             nn.GroupNorm(32, self.num_masks),
             nn.ReLU(inplace=True)
         )
-        self.cbam = CBAM(128)
+        self.sablock = SABlock(128, 128)
         self.conv1x1 = nn.Sequential(
             nn.Conv2d(128, 128, kernel_size=1, stride=1, padding=0)
             )
         
     def forward(self, x, depth_features):
         depth_features = F.interpolate(depth_features, scale_factor=0.5, mode='bilinear', align_corners=False, recompute_scale_factor=False)
-        depth_features = self.cbam(self.conv1x1(depth_features))
-        x = torch.cat([x, depth_features], dim=1)
-        mask_pred = self.conv_pred(x)
+        depth_features = self.sablock(self.conv1x1(depth_features))
+        mask_pred = self.conv_pred(x + depth_features)
         return mask_pred
 
 
@@ -624,7 +623,7 @@ class Depth_Pred(nn.Module):
         self.deconv = nn.Sequential(
             
             nn.ReflectionPad2d(1),
-            nn.Conv2d(256, 128, kernel_size=3, stride=1, padding=0),
+            nn.Conv2d(128, 128, kernel_size=3, stride=1, padding=0),
             nn.BatchNorm2d(128, eps=0.001, momentum=0.01),
             nn.ReLU(inplace=True),
             
@@ -639,15 +638,15 @@ class Depth_Pred(nn.Module):
             nn.Conv2d(64, self.num_output_channels, kernel_size=3, stride=1, padding=0),
             nn.Softplus()
         )
-        self.cbam = CBAM(128)
+        self.sablock = SABlock(128, 128)
         self.conv1x1 = nn.Sequential(
             nn.Conv2d(128, 128, kernel_size=1, stride=1, padding=0)
             )
         
     def forward(self, x, mask_features):
         mask_features = F.interpolate(mask_features, scale_factor=2, mode='bilinear', align_corners=False, recompute_scale_factor=False)
-        mask_features = self.cbam(self.conv1x1(mask_features))
-        x = self.deconv(torch.cat([x, mask_features], dim=1))
+        mask_features = self.sablock(self.conv1x1(mask_features))
+        x = self.deconv(x + mask_features)
         x = self.depth_pred(x)
 
         return x
