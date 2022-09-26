@@ -120,8 +120,8 @@ scannet_dataset = dataset_base.copy({
     'valid_info':   '../../../data1/duccd/scannet_val.json',
 
     # Evaluation images and annotations.
-    'eval_images': '../../../data1/duccd/official/',
-    'eval_info':   '../../../data1/duccd/scannet_eval.json',
+    # 'eval_images': '../../../data1/duccd/official/',
+    # 'eval_info':   '../../../data1/duccd/scannet_eval.json',
 
     # # Training images and annotations
     # 'train_images': '../scannet/official/',
@@ -132,8 +132,8 @@ scannet_dataset = dataset_base.copy({
     # 'valid_info':   'scannet_val.json',
 
     # # Evaluation images and annotations.
-    # 'eval_images': '../scannet/official/',
-    # 'eval_info':   'scannet_eval.json',
+    'eval_images': '../scannet/official/',
+    'eval_info':   'scannet_eval.json',
     
 
     # A list of names for each of you classes.
@@ -487,7 +487,7 @@ PlaneRecNet_base_config = Config(
         'solov2': solov2_base,
 
         # Loss Settings
-        'dice_weight': 3.0,
+        'dice_weight': 5.0,
         'focal_weight': 1.0,
         'depth_weight': 5.0,
         'use_lava_loss': False,
