@@ -93,7 +93,7 @@ def evaluate(net: PlaneRecNet, dataset, during_training=False, eval_nums=-1):
             pred_masks, pred_boxes, pred_classes, pred_scores, pred_depth = [v for k, v in result.items()]
 
             gt_depth = gt_depth.cuda()
-            depth_error_per_frame = compute_depth_metrics(pred_depth, gt_depth, median_scaling=True)
+            depth_error_per_frame = compute_depth_metrics(pred_depth, gt_depth, pred_masks, median_scaling=True, only_plane_areas=True)
             infos.append(depth_error_per_frame)
 
             if pred_masks is not None:
@@ -161,7 +161,7 @@ def tensorborad_visual_log(net: PlaneRecNet, dataset, writer: SummaryWriter, ite
         print('Stopping...')
 
 
-def compute_depth_metrics(pred_depth, gt_depth, median_scaling=True):
+def compute_depth_metrics(pred_depth, gt_depth, pred_masks, median_scaling=True, only_plane_areas=True):
     """
     Computation of error metrics between predicted and ground truth depths.
     Prediction and ground turth need to be converted to the same unit e.g. [meter].
