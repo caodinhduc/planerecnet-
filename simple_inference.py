@@ -160,11 +160,28 @@ def inference_image(net: PlaneRecNet, path: str, save_path: str = None, depth_mo
         name, ext = os.path.splitext(path)
         save_path = name + '_seg' + ext
         depth_path = name + '_dep.png'
+        nor_path = name + '_nor.png'
     else:
         name, ext = os.path.splitext(save_path)
         depth_path = name + '_dep.png'
+        nor_path = name + '_nor.png'
         
     cv2.imwrite(save_path, blended_frame)
+    
+    zx = cv2.Sobel(depth, cv2.CV_64F, 1, 0, ksize=7)
+    zy = cv2.Sobel(depth, cv2.CV_64F, 0, 1, ksize=7)
+    # zy, zx = np.gradient(depth) 
+    normal = np.dstack((-zx, -zy, np.ones_like(depth)))
+    n = np.linalg.norm(normal, axis=2)
+    normal[:, :, 0] /= n
+    normal[:, :, 1] /= n
+    normal[:, :, 2] /= n
+
+    # offset and rescale values to be in 0-255
+    normal += 1
+    normal /= 2
+    normal *= 255
+    cv2.imwrite(nor_path, normal[:, :, ::-1])
 
     if depth_mode == 'colored':
         vmin = np.percentile(depth, 1)
