@@ -50,7 +50,7 @@ class PlaneRecNetLoss(nn.Module):
         self.vnl = VNL_Loss((480,640))
         # self.vnl = VNL_Loss((640,640))
         
-        # self.boundary_loss = BoundaryLoss()
+        self.boundary_loss = BoundaryLoss()
         
 
     def forward(self, net, mask_preds, cate_preds, kernel_preds, depth_preds, gt_instances, gt_depths):
@@ -121,15 +121,15 @@ class PlaneRecNetLoss(nn.Module):
         losses['ins'] = loss_ins
 
 
-        # # Boundary loss
-        # loss_boundary = []
-        # for input, target in zip(ins_pred_list, ins_labels):
-        #     if input is None:
-        #         continue
-        #     input = torch.sigmoid(input)
-        #     loss_boundary.append(self.boundary_loss(input, target))
-        # loss_bdr_mean = torch.stack(loss_boundary).mean()
-        # losses['bdr'] = loss_bdr_mean
+        # Boundary loss
+        loss_boundary = []
+        for input, target in zip(ins_pred_list, ins_labels):
+            if input is None:
+                continue
+            input = torch.sigmoid(input)
+            loss_boundary.append(self.boundary_loss(input, target))
+        loss_bdr_mean = torch.stack(loss_boundary).mean()
+        losses['bdr'] = loss_bdr_mean
 
         # Classification Loss
         cate_labels = [
