@@ -48,7 +48,6 @@ class PlaneRecNetLoss(nn.Module):
         self.point_wise_depth_loss = RMSElogLoss(reduction="mean")
         self.depth_constraint_inst_loss = LavaLoss()
         self.vnl = VNL_Loss((480,640))
-        # self.vnl = VNL_Loss((640,640))
         
         self.boundary_loss = BoundaryLoss()
         
@@ -154,6 +153,37 @@ class PlaneRecNetLoss(nn.Module):
         # Point-wise Depth Loss
         gt_depths = Variable(gt_depths, requires_grad=False)
         depth_preds = F.interpolate(depth_preds, scale_factor=2, mode='bilinear', align_corners=False)
+        
+        #---------------------------------------------------------------------------------------------
+        # sobel_x = torch.Tensor([[1, 0, -1],
+        #                 [2, 0, -2],
+        #                 [1, 0, -1]])
+        # sobel_x = sobel_x.view((1, 1, 3, 3))
+        # sobel_x = torch.autograd.Variable(sobel_x.cuda())
+
+        # sobel_y = torch.Tensor([[1, 2, 1],
+        #                         [0, 0, 0],
+        #                         [-1, -2, -1]])
+        # sobel_y = sobel_y.view((1, 1, 3, 3))
+        # sobel_y = torch.autograd.Variable(sobel_y.cuda())
+        
+        # depth_map_padded = F.pad(gt_depths, pad=(1,1,1,1), mode='reflect') # Don't use zero padding mode, you know why.
+        # gx = F.conv2d(depth_map_padded, (1.0 / 8.0) * sobel_x, padding=0)
+        # gy = F.conv2d(depth_map_padded, (1.0 / 8.0) * sobel_y, padding=0)
+        # gradients = torch.pow(gx, 2) + torch.pow(gy, 2)
+        
+        # import os
+        # import cv2
+        # import numpy as np
+        # for i in range(gradients.shape[0]):
+        #     current_tensor = gradients[i, 0, :, :].detach().cpu().numpy()
+        #     current_tensor = ((current_tensor - current_tensor.min()) / (current_tensor.max() - current_tensor.min()) * 255).astype(np.uint8)
+        #     # current_tensor = cv2.Canny(current_tensor,50,100, 1)
+        #     tensor_color = cv2.applyColorMap(current_tensor, cv2.COLORMAP_VIRIDIS)
+        #     tensor_color_path = os.path.join('image_logs/GR', '{}.png'.format(i))
+        #     cv2.imwrite(tensor_color_path, tensor_color)
+        #---------------------------------------------------------------------------------------------
+        
         valid_mask = (gt_depths > cfg.dataset.min_depth) # All ground truth >= min depth are considered as invalid/non-informative pixels
         gt_depths.clamp(max=cfg.dataset.max_depth)
         loss_depth = self.depth_loss_weight * self.point_wise_depth_loss(depth_preds, gt_depths, valid_mask)
@@ -389,10 +419,36 @@ class BoundaryLoss(nn.Module):
         self.laplacian_kernel[0,0,w,w] = (2*w+1)*(2*w+1)-1
         self.laplacian_kernel.cuda()
         self.loss = nn.MSELoss().cuda()
+        
     def forward(self, input, target):
         target = target.float()
         target_boundary = F.conv2d(target.unsqueeze(1), self.laplacian_kernel, padding=1).squeeze(1)
         input_boundary = F.conv2d(input.unsqueeze(1), self.laplacian_kernel, padding=1).squeeze(1)
+        
+        input_boundary = F.interpolate(input_boundary.unsqueeze(1), scale_factor=0.5, mode='bilinear', align_corners=False, recompute_scale_factor=False).squeeze(1)
+        target_boundary = F.interpolate(target_boundary.unsqueeze(1), scale_factor=0.5, mode='bilinear', align_corners=False, recompute_scale_factor=False).squeeze(1)
+        
+        #------------------------------------------------------------------------------------------------------------
+        # import os
+        # import cv2
+        # import numpy as np
+        # for i in range(input_boundary.shape[0]):
+        #     current_tensor = input_boundary[i, :, :].detach().cpu().numpy()
+        #     current_tensor = ((current_tensor - current_tensor.min()) / (current_tensor.max() - current_tensor.min()) * 255).astype(np.uint8)
+        #     # current_tensor = cv2.Canny(current_tensor,50,100, 1)
+        #     tensor_color = cv2.applyColorMap(current_tensor, cv2.COLORMAP_VIRIDIS)
+        #     tensor_color_path = os.path.join('image_logs/PR', '{}.png'.format(i))
+        #     cv2.imwrite(tensor_color_path, tensor_color)
+        
+        # for i in range(target_boundary.shape[0]):
+        #     current_tensor = target_boundary[i, :, :].detach().cpu().numpy()
+        #     current_tensor = ((current_tensor - current_tensor.min()) / (current_tensor.max() - current_tensor.min()) * 255).astype(np.uint8)
+        #     # current_tensor = cv2.Canny(current_tensor,50,100, 1)
+        #     tensor_color = cv2.applyColorMap(current_tensor, cv2.COLORMAP_VIRIDIS)
+        #     tensor_color_path = os.path.join('image_logs/GT', '{}.png'.format(i))
+        #     cv2.imwrite(tensor_color_path, tensor_color)
+        
+        #------------------------------------------------------------------------------------------------------------
 
         input = input_boundary.contiguous().view(input.size()[0], -1)
         target = target_boundary.contiguous().view(target.size()[0], -1).float()
