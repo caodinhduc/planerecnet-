@@ -425,8 +425,8 @@ class BoundaryLoss(nn.Module):
         target_boundary = F.conv2d(target.unsqueeze(1), self.laplacian_kernel, padding=1).squeeze(1)
         input_boundary = F.conv2d(input.unsqueeze(1), self.laplacian_kernel, padding=1).squeeze(1)
         
-        input_boundary = F.interpolate(input_boundary.unsqueeze(1), scale_factor=0.5, mode='bilinear', align_corners=False, recompute_scale_factor=False).squeeze(1)
-        target_boundary = F.interpolate(target_boundary.unsqueeze(1), scale_factor=0.5, mode='bilinear', align_corners=False, recompute_scale_factor=False).squeeze(1)
+        input_boundary_2 = F.interpolate(input_boundary.unsqueeze(1), scale_factor=0.5, mode='bilinear', align_corners=False, recompute_scale_factor=False).squeeze(1)
+        target_boundary_2 = F.interpolate(target_boundary.unsqueeze(1), scale_factor=0.5, mode='bilinear', align_corners=False, recompute_scale_factor=False).squeeze(1)
         
         #------------------------------------------------------------------------------------------------------------
         # import os
@@ -449,7 +449,16 @@ class BoundaryLoss(nn.Module):
         #     cv2.imwrite(tensor_color_path, tensor_color)
         
         #------------------------------------------------------------------------------------------------------------
-
+        # computer for downscale 2
+        
+        input2 = input_boundary_2.contiguous().view(input.size()[0], -1)
+        target2 = target_boundary_2.contiguous().view(target.size()[0], -1).float()
+        target2 = torch.abs(target2)
+        input2 = torch.abs(input2)
+        pos_index2 = (input2 >= 0.25)
+        input2 = input2[pos_index2]
+        target2 = target2[pos_index2]
+        
         input = input_boundary.contiguous().view(input.size()[0], -1)
         target = target_boundary.contiguous().view(target.size()[0], -1).float()
         target = torch.abs(target)
@@ -457,7 +466,8 @@ class BoundaryLoss(nn.Module):
         pos_index = (input >= 0.25)
         input = input[pos_index]
         target = target[pos_index]
-        loss = self.loss(input, target)
+
+        loss = self.loss(input, target) + self.loss(input2, target2)
         return loss
 
 

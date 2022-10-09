@@ -131,7 +131,7 @@ scannet_dataset = dataset_base.copy({
     # 'valid_images': '../scannet/official/',
     # 'valid_info':   'scannet_val.json',
 
-    # # Evaluation images and annotations.
+    # # # Evaluation images and annotations.
     # 'eval_images': '../scannet/official/',
     # 'eval_info':   'scannet_eval.json',
     
@@ -487,7 +487,7 @@ PlaneRecNet_base_config = Config(
         'solov2': solov2_base,
 
         # Loss Settings
-        'dice_weight': 5.0,
+        'dice_weight': 10.0,
         'focal_weight': 1.0,
         'depth_weight': 5.0,
         'use_lava_loss': False,
