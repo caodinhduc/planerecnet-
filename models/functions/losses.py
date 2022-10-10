@@ -419,34 +419,35 @@ class BoundaryLoss(nn.Module):
         self.laplacian_kernel[0,0,w,w] = (2*w+1)*(2*w+1)-1
         self.laplacian_kernel.cuda()
         self.loss = nn.MSELoss().cuda()
+        self.m = nn.AvgPool2d((2, 2), stride=(2, 2))
         
     def forward(self, input, target):
         target = target.float()
         target_boundary = F.conv2d(target.unsqueeze(1), self.laplacian_kernel, padding=1).squeeze(1)
         input_boundary = F.conv2d(input.unsqueeze(1), self.laplacian_kernel, padding=1).squeeze(1)
         
-        input_boundary_2 = F.interpolate(input_boundary.unsqueeze(1), scale_factor=0.5, mode='bilinear', align_corners=False, recompute_scale_factor=False).squeeze(1)
-        target_boundary_2 = F.interpolate(target_boundary.unsqueeze(1), scale_factor=0.5, mode='bilinear', align_corners=False, recompute_scale_factor=False).squeeze(1)
+        input_boundary_2 = self.m(input_boundary.unsqueeze(1)).squeeze(1)
+        target_boundary_2 = self.m(target_boundary.unsqueeze(1)).squeeze(1)
         
         #------------------------------------------------------------------------------------------------------------
-        # import os
-        # import cv2
-        # import numpy as np
-        # for i in range(input_boundary.shape[0]):
-        #     current_tensor = input_boundary[i, :, :].detach().cpu().numpy()
-        #     current_tensor = ((current_tensor - current_tensor.min()) / (current_tensor.max() - current_tensor.min()) * 255).astype(np.uint8)
-        #     # current_tensor = cv2.Canny(current_tensor,50,100, 1)
-        #     tensor_color = cv2.applyColorMap(current_tensor, cv2.COLORMAP_VIRIDIS)
-        #     tensor_color_path = os.path.join('image_logs/PR', '{}.png'.format(i))
-        #     cv2.imwrite(tensor_color_path, tensor_color)
+        import os
+        import cv2
+        import numpy as np
+        for i in range(input_boundary_2.shape[0]):
+            current_tensor = input_boundary_2[i, :, :].detach().cpu().numpy()
+            current_tensor = ((current_tensor - current_tensor.min()) / (current_tensor.max() - current_tensor.min()) * 255).astype(np.uint8)
+            # current_tensor = cv2.Canny(current_tensor,50,100, 1)
+            tensor_color = cv2.applyColorMap(current_tensor, cv2.COLORMAP_VIRIDIS)
+            tensor_color_path = os.path.join('image_logs/PR', '{}.png'.format(i))
+            cv2.imwrite(tensor_color_path, tensor_color)
         
-        # for i in range(target_boundary.shape[0]):
-        #     current_tensor = target_boundary[i, :, :].detach().cpu().numpy()
-        #     current_tensor = ((current_tensor - current_tensor.min()) / (current_tensor.max() - current_tensor.min()) * 255).astype(np.uint8)
-        #     # current_tensor = cv2.Canny(current_tensor,50,100, 1)
-        #     tensor_color = cv2.applyColorMap(current_tensor, cv2.COLORMAP_VIRIDIS)
-        #     tensor_color_path = os.path.join('image_logs/GT', '{}.png'.format(i))
-        #     cv2.imwrite(tensor_color_path, tensor_color)
+        for i in range(target_boundary_2.shape[0]):
+            current_tensor = target_boundary_2[i, :, :].detach().cpu().numpy()
+            current_tensor = ((current_tensor - current_tensor.min()) / (current_tensor.max() - current_tensor.min()) * 255).astype(np.uint8)
+            # current_tensor = cv2.Canny(current_tensor,50,100, 1)
+            tensor_color = cv2.applyColorMap(current_tensor, cv2.COLORMAP_VIRIDIS)
+            tensor_color_path = os.path.join('image_logs/GT', '{}.png'.format(i))
+            cv2.imwrite(tensor_color_path, tensor_color)
         
         #------------------------------------------------------------------------------------------------------------
         # computer for downscale 2
