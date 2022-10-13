@@ -137,5 +137,6 @@ dmypy.json
 logs/
 .vscode/
 weights/
+image_logs/
 *.json
 __pycache__
