@@ -50,6 +50,7 @@ class PlaneRecNetLoss(nn.Module):
         self.vnl = VNL_Loss((480,640))
         
         # self.boundary_loss = BoundaryLoss()
+        self.plane_guide_smooth_depth_loss = Plane_guide_smooth_depth_loss()
         
 
     def forward(self, net, mask_preds, cate_preds, kernel_preds, depth_preds, gt_instances, gt_depths):
@@ -72,6 +73,23 @@ class PlaneRecNetLoss(nn.Module):
         ins_labels = [torch.cat([ins_labels_level_img
                                  for ins_labels_level_img in ins_labels_level], 0)
                       for ins_labels_level in zip(*ins_label_list)]
+
+
+        #------------------------------------------------------------------------------------------------------------
+        # select gt mask for depth smooth loss
+        depth_smooth_ins_labels = [torch.cat([i for i in y]) for y in ins_label_list]
+        # track = ins_labels[1]
+        # import os
+        # import cv2
+        # import numpy as np
+        # for i in range(track.shape[0]):
+        #     current_tensor = track[i, :, :].detach().cpu().numpy()
+        #     current_tensor = ((current_tensor - current_tensor.min()) / (current_tensor.max() - current_tensor.min()) * 255).astype(np.uint8)
+        #     # current_tensor = cv2.Canny(current_tensor,50,100, 1)
+        #     tensor_color = cv2.applyColorMap(current_tensor, cv2.COLORMAP_VIRIDIS)
+        #     tensor_color_path = os.path.join('image_logs/mask', '{}.png'.format(i))
+        #     cv2.imwrite(tensor_color_path, tensor_color)
+
 
         kernel_preds = [[kernel_preds_level_img.view(kernel_preds_level_img.shape[0], -1)[:, grid_orders_level_img]
                          for kernel_preds_level_img, grid_orders_level_img in
@@ -238,7 +256,23 @@ class PlaneRecNetLoss(nn.Module):
             else:
                 loss_lava = torch.tensor([0.])
             losses['lav'] = loss_lava
+            
+            
+        # Plane Guide to Smooth Depth
+        batched_gt_scale_invariant_gradient_preds = (compute_gradient_map_prediction(depth_preds, valid_mask) / torch.pow(depth_preds.clamp(min=self.depth_resolution), 2))
+        batched_gt_scale_invariant_gradient_preds = batched_gt_scale_invariant_gradient_preds.clamp(max=1e-2)
+        depth_smooth_loss = []
+        for i in range(len(depth_smooth_ins_labels)):
+            depth_smooth_loss += self.plane_guide_smooth_depth_loss(batched_gt_scale_invariant_gradient_preds[i], depth_smooth_ins_labels[i])
+        if len(depth_smooth_loss) != 0:
+            depth_smooth_loss_mean = torch.stack(depth_smooth_loss).mean() + 0.001
+        else:
+            depth_smooth_loss_mean = torch.tensor([0.])
+        losses['dsl'] = depth_smooth_loss_mean
         return losses
+
+
+
 
     @torch.no_grad()
     def prepare_ground_truth(self, gt_instances_per_frame, mask_feat_size):
@@ -343,6 +377,32 @@ class LavaLoss(nn.Module):
         lava_loss_per_img = seg_masks.mul(gradient_map)
         loss = lava_loss_per_img.sum() / (gradient_map.sum() * seg_masks.shape[0])
         return loss
+
+def compute_gradient_map_prediction(depth_map, valid_mask=None):
+    '''
+    Compute gradient map from depth map with 3x3 sobel filter
+    '''
+    sobel_x = torch.Tensor([[1, 0, -1],
+                            [2, 0, -2],
+                            [1, 0, -1]]).requires_grad_(False)
+    sobel_x = sobel_x.view((1, 1, 3, 3))
+    sobel_x = torch.autograd.Variable(sobel_x.cuda())
+
+    sobel_y = torch.Tensor([[1, 2, 1],
+                            [0, 0, 0],
+                            [-1, -2, -1]]).requires_grad_(False)
+    sobel_y = sobel_y.view((1, 1, 3, 3))
+    sobel_y = torch.autograd.Variable(sobel_y.cuda())
+    
+    depth_map_padded = F.pad(depth_map, pad=(1,1,1,1), mode='reflect') # Don't use zero padding mode, you know why.
+    gx = F.conv2d(depth_map_padded, (1.0 / 8.0) * sobel_x, padding=0)
+    gy = F.conv2d(depth_map_padded, (1.0 / 8.0) * sobel_y, padding=0)
+    gradients = torch.pow(gx, 2) + torch.pow(gy, 2)
+
+    if valid_mask is not None:
+        gradients = gradients * valid_mask
+    
+    return gradients
 
 @torch.no_grad()
 def compute_gradient_map(depth_map, valid_mask=None):
@@ -513,4 +573,28 @@ class RMSElogLoss(nn.Module):
 
         return loss
 
+import numpy as np
+class Plane_guide_smooth_depth_loss(nn.Module):
+    def __init__(self):
+        super(Plane_guide_smooth_depth_loss, self).__init__()
+        self.number_process_plane = 5
+        self.r = 4
+        self.loss = nn.MSELoss(reduction='sum').cuda()
+
+    def forward(self, batched_gt_scale_invariant_gradient_preds, depth_smooth_ins_labels):
+        depth_smooth_ins_labels = F.interpolate(depth_smooth_ins_labels.unsqueeze(0), scale_factor=4).squeeze(0)
+        depth_smooth_ins_labels = depth_smooth_ins_labels[:, 20:460, 20: 620]
+        batched_gt_scale_invariant_gradient_preds = batched_gt_scale_invariant_gradient_preds[:, 20:460, 20: 620]
+        #remove left, right, up, down
+        loss = []
+        index = np.random.choice(depth_smooth_ins_labels.shape[0], self.number_process_plane, replace=False)
+        for i in index:
+            pos_index = depth_smooth_ins_labels[i]> 0
+            num_repeat = torch.sum(pos_index)
+            loss.append(self.loss(batched_gt_scale_invariant_gradient_preds.squeeze(0)[pos_index], torch.mean(batched_gt_scale_invariant_gradient_preds.squeeze(0)[pos_index]).repeat(num_repeat)))
+        
+        return loss
+        
+        
+        
 
