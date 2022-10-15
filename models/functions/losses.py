@@ -49,7 +49,7 @@ class PlaneRecNetLoss(nn.Module):
         self.depth_constraint_inst_loss = LavaLoss()
         self.vnl = VNL_Loss((480,640))
         
-        # self.boundary_loss = BoundaryLoss()
+        self.boundary_loss = BoundaryLoss()
         
 
     def forward(self, net, mask_preds, cate_preds, kernel_preds, depth_preds, gt_instances, gt_depths):
@@ -120,15 +120,15 @@ class PlaneRecNetLoss(nn.Module):
         losses['ins'] = loss_ins
 
 
-        # # Boundary loss
-        # loss_boundary = []
-        # for input, target in zip(ins_pred_list, ins_labels):
-        #     if input is None:
-        #         continue
-        #     input = torch.sigmoid(input)
-        #     loss_boundary.append(self.boundary_loss(input, target))
-        # loss_bdr_mean = torch.stack(loss_boundary).mean()
-        # losses['bdr'] = loss_bdr_mean
+        # Boundary loss
+        loss_boundary = []
+        for input, target in zip(ins_pred_list, ins_labels):
+            if input is None:
+                continue
+            input = torch.sigmoid(input)
+            loss_boundary.append(self.boundary_loss(input, target))
+        loss_bdr_mean = torch.stack(loss_boundary).mean()
+        losses['bdr'] = loss_bdr_mean
 
         # Classification Loss
         cate_labels = [
@@ -419,7 +419,6 @@ class BoundaryLoss(nn.Module):
         self.laplacian_kernel[0,0,w,w] = (2*w+1)*(2*w+1)-1
         self.laplacian_kernel.cuda()
         self.loss = nn.MSELoss().cuda()
-        self.m = nn.AvgPool2d((2, 2), stride=(2, 2))
         
     def forward(self, input, target):
         target = target.float()
@@ -482,7 +481,7 @@ class BoundaryLoss(nn.Module):
         target = target_boundary.contiguous().view(target.size()[0], -1).float()
         target = torch.abs(target)
         input = torch.abs(input)
-        pos_index = (input >= 0.25)
+        pos_index = (input >= 0.1)
         input = input[pos_index]
         target = target[pos_index]
 
