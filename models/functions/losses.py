@@ -1,3 +1,4 @@
+from turtle import pos
 import torch
 import torch.nn.functional as F
 from torch import nn
@@ -259,8 +260,9 @@ class PlaneRecNetLoss(nn.Module):
             
             
         # Plane Guide to Smooth Depth
-        batched_gt_scale_invariant_gradient_preds = (compute_gradient_map_prediction(depth_preds, valid_mask) / torch.pow(depth_preds.clamp(min=self.depth_resolution), 2))
-        batched_gt_scale_invariant_gradient_preds = batched_gt_scale_invariant_gradient_preds.clamp(max=1e-2)
+        batched_gt_scale_invariant_gradient_preds = compute_gradient_map_prediction(depth_preds, valid_mask) / depth_preds.clamp(min=self.depth_resolution)
+        # batched_gt_scale_invariant_gradient_preds = compute_gradient_map_prediction(depth_preds, valid_mask)
+        batched_gt_scale_invariant_gradient_preds = batched_gt_scale_invariant_gradient_preds.clamp(max=1.0)
         depth_smooth_loss = []
         for i in range(len(depth_smooth_ins_labels)):
             depth_smooth_loss += self.plane_guide_smooth_depth_loss(batched_gt_scale_invariant_gradient_preds[i], depth_smooth_ins_labels[i])
@@ -380,24 +382,15 @@ class LavaLoss(nn.Module):
 
 def compute_gradient_map_prediction(depth_map, valid_mask=None):
     '''
+    depth map: 2x1x480x640
     Compute gradient map from depth map with 3x3 sobel filter
     '''
-    sobel_x = torch.Tensor([[1, 0, -1],
-                            [2, 0, -2],
-                            [1, 0, -1]]).requires_grad_(False)
-    sobel_x = sobel_x.view((1, 1, 3, 3))
-    sobel_x = torch.autograd.Variable(sobel_x.cuda())
-
-    sobel_y = torch.Tensor([[1, 2, 1],
-                            [0, 0, 0],
-                            [-1, -2, -1]]).requires_grad_(False)
-    sobel_y = sobel_y.view((1, 1, 3, 3))
-    sobel_y = torch.autograd.Variable(sobel_y.cuda())
+    w = 1
+    laplacian_kernel = torch.zeros((2*w+1, 2*w+1), dtype=torch.float32).reshape(1,1,2*w+1,2*w+1).requires_grad_(False) - 1
+    laplacian_kernel[0,0,w,w] = (2*w+1)*(2*w+1)-1
+    gradients = F.conv2d(depth_map, laplacian_kernel, padding=1)
     
-    depth_map_padded = F.pad(depth_map, pad=(1,1,1,1), mode='reflect') # Don't use zero padding mode, you know why.
-    gx = F.conv2d(depth_map_padded, (1.0 / 8.0) * sobel_x, padding=0)
-    gy = F.conv2d(depth_map_padded, (1.0 / 8.0) * sobel_y, padding=0)
-    gradients = torch.pow(gx, 2) + torch.pow(gy, 2)
+    gradients = torch.abs(gradients)
 
     if valid_mask is not None:
         gradients = gradients * valid_mask
@@ -578,10 +571,21 @@ class Plane_guide_smooth_depth_loss(nn.Module):
     def __init__(self):
         super(Plane_guide_smooth_depth_loss, self).__init__()
         self.number_process_plane = 5
-        self.r = 4
-        self.loss = nn.MSELoss(reduction='sum').cuda()
+        self.loss = nn.L1Loss(reduction='sum').cuda()
 
     def forward(self, batched_gt_scale_invariant_gradient_preds, depth_smooth_ins_labels):
+        
+        # import os
+        # import cv2
+        # import numpy as np
+        # for i in range(batched_gt_scale_invariant_gradient_preds.shape[0]):
+        #     current_tensor = batched_gt_scale_invariant_gradient_preds[i, :, :].detach().cpu().numpy()
+        #     current_tensor = ((current_tensor - current_tensor.min()) / (current_tensor.max() - current_tensor.min()) * 255).astype(np.uint8)
+        #     # current_tensor = cv2.Canny(current_tensor,50,100, 1)
+        #     tensor_color = cv2.applyColorMap(current_tensor, cv2.COLORMAP_VIRIDIS)
+        #     tensor_color_path = os.path.join('image_logs/gradient', '{}.png'.format(i))
+        #     cv2.imwrite(tensor_color_path, tensor_color)
+        
         depth_smooth_ins_labels = F.interpolate(depth_smooth_ins_labels.unsqueeze(0), scale_factor=4).squeeze(0)
         depth_smooth_ins_labels = depth_smooth_ins_labels[:, 20:460, 20: 620]
         batched_gt_scale_invariant_gradient_preds = batched_gt_scale_invariant_gradient_preds[:, 20:460, 20: 620]
@@ -590,8 +594,30 @@ class Plane_guide_smooth_depth_loss(nn.Module):
         index = np.random.choice(depth_smooth_ins_labels.shape[0], self.number_process_plane, replace=False)
         for i in index:
             pos_index = depth_smooth_ins_labels[i]> 0
+            
+            x = 100
+            y = 100
+            count = 0
+            while True:
+                if count >= 20:
+                    break
+                if pos_index[x, y] == True:
+                    break
+                else:
+                    x = np.random.randint(10, 430, 1)[0]
+                    y = np.random.randint(10, 590, 1)[0]
+                count += 1
+            if pos_index[x, y] == False:
+                continue
+            pos_index[:x - 3, :] = False
+            pos_index[x + 3:, :] = False
+            pos_index[:, :y - 3] = False
+            pos_index[:, y + 3:] = False
+        
             num_repeat = torch.sum(pos_index)
-            loss.append(self.loss(batched_gt_scale_invariant_gradient_preds.squeeze(0)[pos_index], torch.mean(batched_gt_scale_invariant_gradient_preds.squeeze(0)[pos_index]).repeat(num_repeat)))
+            a = batched_gt_scale_invariant_gradient_preds.squeeze(0)[pos_index]
+            b = torch.mean(batched_gt_scale_invariant_gradient_preds.squeeze(0)[pos_index]).repeat(num_repeat)
+            loss.append(self.loss(a, b))
         
         return loss
         
