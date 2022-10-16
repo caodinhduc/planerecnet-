@@ -609,12 +609,15 @@ class Plane_guide_smooth_depth_loss(nn.Module):
                 count += 1
             if pos_index[x, y] == False:
                 continue
-            pos_index[:x - 3, :] = False
-            pos_index[x + 3:, :] = False
-            pos_index[:, :y - 3] = False
-            pos_index[:, y + 3:] = False
-        
+            pos_index[:x - 2, :] = False
+            pos_index[x + 2:, :] = False
+            pos_index[:, :y - 2] = False
+            pos_index[:, y + 2:] = False
+            
             num_repeat = torch.sum(pos_index)
+            
+            if num_repeat < 16:
+                continue
             a = batched_gt_scale_invariant_gradient_preds.squeeze(0)[pos_index]
             b = torch.mean(batched_gt_scale_invariant_gradient_preds.squeeze(0)[pos_index]).repeat(num_repeat)
             loss.append(self.loss(a, b))
