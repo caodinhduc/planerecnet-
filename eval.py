@@ -77,6 +77,10 @@ def evaluate(net: PlaneRecNet, dataset, during_training=False, eval_nums=-1):
         'mask': [APDataObject() for _ in iou_thresholds]
     }
 
+    RI = []
+    VOI = []
+    SC = []
+
     try:
         # Main eval loop
         for it, image_idx in enumerate(dataset_indices):
@@ -100,6 +104,12 @@ def evaluate(net: PlaneRecNet, dataset, during_training=False, eval_nums=-1):
                 pred_masks = pred_masks.float()
                 gt_masks = gt_masks.float()
                 compute_segmentation_metrics(ap_data, gt_masks, gt_boxes, gt_classes, pred_masks, pred_boxes, pred_classes, pred_scores)
+            
+                valid_mask = pred_depth > 1e-4
+                ri, voi, sc = evaluateMasksTensor(pred_masks, gt_masks, valid_mask)
+                RI.append(float(ri))
+                VOI.append(float(voi))
+                SC.append(float(sc))
             
             # First couple of images take longer because we're constructing the graph.
             # Since that's technically initialization, don't include those in the FPS calculations.
@@ -125,7 +135,9 @@ def evaluate(net: PlaneRecNet, dataset, during_training=False, eval_nums=-1):
             depth_metrics[3], infos[3], depth_metrics[4], infos[4], depth_metrics[5], infos[5],
             depth_metrics[6], infos[6], depth_metrics[7], infos[7]
         ))
-
+        print("ri: ", np.mean(RI))
+        print("VOI: ", np.mean(VOI))
+        print("SC: ", np.mean(SC))
     except KeyboardInterrupt:
         print('Stopping...')
 
@@ -352,6 +364,32 @@ def calc_map(ap_data):
     all_maps = {k: {j: round(u, 2) for j, u in v.items()}
                 for k, v in all_maps.items()}
     return all_maps
+
+
+def evaluateMasksTensor(predMasks, gtMasks, valid_mask, printInfo=False):
+    gtMasks = torch.cat([gtMasks, torch.clamp(1 - gtMasks.sum(0, keepdim=True), min=0)], dim=0)
+    predMasks = torch.cat([predMasks, torch.clamp(1 - predMasks.sum(0, keepdim=True), min=0)], dim=0)
+    intersection = (gtMasks.unsqueeze(1) * predMasks * valid_mask).sum(-1).sum(-1).float()
+    union = (torch.max(gtMasks.unsqueeze(1), predMasks) * valid_mask).sum(-1).sum(-1).float()    
+
+    N = intersection.sum()
+    
+    RI = 1 - ((intersection.sum(0).pow(2).sum() + intersection.sum(1).pow(2).sum()) / 2 - intersection.pow(2).sum()) / (N * (N - 1) / 2)
+    joint = intersection / N
+    marginal_2 = joint.sum(0)
+    marginal_1 = joint.sum(1)
+    H_1 = (-marginal_1 * torch.log2(marginal_1 + (marginal_1 == 0).float())).sum()
+    H_2 = (-marginal_2 * torch.log2(marginal_2 + (marginal_2 == 0).float())).sum()
+
+    B = (marginal_1.unsqueeze(-1) * marginal_2)
+    log2_quotient = torch.log2(torch.clamp(joint, 1e-8) / torch.clamp(B, 1e-8)) * (torch.min(joint, B) > 1e-8).float()
+    MI = (joint * log2_quotient).sum()
+    voi = H_1 + H_2 - 2 * MI
+
+    IOU = intersection / torch.clamp(union, min=1)
+    SC = ((IOU.max(-1)[0] * torch.clamp((gtMasks * valid_mask).sum(-1).sum(-1), min=1e-4)).sum() / N + (IOU.max(0)[0] * torch.clamp((predMasks * valid_mask).sum(-1).sum(-1), min=1e-4)).sum() / N) / 2
+    return RI, voi, SC
+
 
 def print_maps(all_maps):
     # Warning: hacky
