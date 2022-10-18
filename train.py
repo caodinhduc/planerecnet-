@@ -219,10 +219,12 @@ def train():
 
     dataset = eval(cfg.dataset.name)(image_path=cfg.dataset.train_images, 
                             anno_file=cfg.dataset.train_info,
+                            # has_pos=False,
                             transform=SSDAugmentation(MEANS))
 
     setup_eval()
     val_dataset = eval(cfg.dataset.name)(image_path=cfg.dataset.valid_images,
+                            # has_pos=False,
                             anno_file=cfg.dataset.valid_info,
                             transform=BaseTransform(MEANS))
 
