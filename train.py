@@ -14,7 +14,7 @@ from tensorboardX import SummaryWriter
 
 from planerecnet import PlaneRecNet
 from data.config import cfg, MEANS, set_cfg, set_dataset
-from data.datasets import PlaneAnnoDataset, S2D3DSDataset, ScanNetDataset, detection_collate, enforce_size
+from data.datasets import PlaneAnnoDataset, S2D3DSDataset, ScanNetDataset, NYUDataset, detection_collate, enforce_size
 from data.augmentations import SSDAugmentation, BaseTransform
 from utils.utils import SavePath, MovingAverage
 from utils import timer

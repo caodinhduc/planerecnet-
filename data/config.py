@@ -124,17 +124,18 @@ scannet_dataset = dataset_base.copy({
     'eval_images': '../../../data1/duccd/official/',
     'eval_info':   '../../../data1/duccd/scannet_eval.json',
 
-    # # Training images and annotations
+    # Training images and annotations
     # 'train_images': '../scannet/used_filter_scans/',
     # 'train_info':   'filter_scannet_train.json',
-
-    # # Validation images and annotations.
+ 
+    # Validation images and annotations.
     # 'valid_images': '../scannet/used_filter_scans/',
     # 'valid_info':   'filter_scannet_val.json',
 
     # Evaluation images and annotations.
     # 'eval_images': '../scannet/official/',
     # 'eval_info':   'scannet_eval.json',
+
     
 
     # A list of names for each of you classes.
@@ -155,6 +156,15 @@ nyu_eval = dataset_base.copy({
     # Evaluation images and annotations.
     'eval_images': '../nyuv2/nyu_images/',
     'eval_info':   '../nyuv2/nyu_test.json',
+    
+    'train_images': '../nyuv2/nyu_images/',
+    'train_info':   '../nyuv2/nyu_train.json',
+    # Validation images and annotations.
+    # 'valid_images': '../scannet/used_filter_scans/',
+    # 'valid_info':   'filter_scannet_val.json',
+    'valid_images': '../nyuv2/nyu_images/',
+    'valid_info':   '../nyuv2/nyu_test.json',
+    
     # Resize scale factor
     'scale_factor': 1,
     'min_depth': 1/1000,
