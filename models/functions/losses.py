@@ -260,16 +260,19 @@ class PlaneRecNetLoss(nn.Module):
             
             
         # Plane Guide to Smooth Depth
-        batched_gt_scale_invariant_gradient_preds = compute_gradient_map_prediction(depth_preds, valid_mask) / depth_preds.clamp(min=self.depth_resolution)
-        # batched_gt_scale_invariant_gradient_preds = compute_gradient_map_prediction(depth_preds, valid_mask)
-        batched_gt_scale_invariant_gradient_preds = batched_gt_scale_invariant_gradient_preds.clamp(max=1.0)
+        batched_gt_scale_invariant_gradient_preds = compute_gradient_map_prediction(depth_preds, valid_mask) / gt_depths.clamp(min=self.depth_resolution)
+        batched_gt_scale_invariant_gradient_gts = compute_gradient_map_prediction(gt_depths, valid_mask) / gt_depths.clamp(min=self.depth_resolution)
+        # normalize
+        batched_gt_scale_invariant_gradient_preds = batched_gt_scale_invariant_gradient_preds.clamp(max=1.0, min=self.depth_resolution)
+        batched_gt_scale_invariant_gradient_gts = batched_gt_scale_invariant_gradient_gts.clamp(max=1.0, min=self.depth_resolution)
+        
         depth_smooth_loss = []
         for i in range(len(depth_smooth_ins_labels)):
-            depth_smooth_loss += self.plane_guide_smooth_depth_loss(batched_gt_scale_invariant_gradient_preds[i], depth_smooth_ins_labels[i])
+            depth_smooth_loss += self.plane_guide_smooth_depth_loss(batched_gt_scale_invariant_gradient_preds[i], batched_gt_scale_invariant_gradient_gts[i], depth_smooth_ins_labels[i])
         if len(depth_smooth_loss) != 0:
             depth_smooth_loss_mean = torch.stack(depth_smooth_loss).mean() + 0.001
         else:
-            depth_smooth_loss_mean = torch.tensor([0.])
+            depth_smooth_loss_mean = torch.tensor([0.001])
         losses['dsl'] = depth_smooth_loss_mean
         return losses
 
@@ -388,7 +391,9 @@ def compute_gradient_map_prediction(depth_map, valid_mask=None):
     w = 1
     laplacian_kernel = torch.zeros((2*w+1, 2*w+1), dtype=torch.float32).reshape(1,1,2*w+1,2*w+1).requires_grad_(False) - 1
     laplacian_kernel[0,0,w,w] = (2*w+1)*(2*w+1)-1
-    gradients = F.conv2d(depth_map, laplacian_kernel, padding=1)
+    
+    depth_map_padded = F.pad(depth_map, pad=(1,1,1,1), mode='reflect') # Don't use zero padding mode, you know why.
+    gradients = F.conv2d(depth_map_padded, laplacian_kernel, padding=0)
     
     gradients = torch.abs(gradients)
 
@@ -472,12 +477,11 @@ class BoundaryLoss(nn.Module):
         self.laplacian_kernel[0,0,w,w] = (2*w+1)*(2*w+1)-1
         self.laplacian_kernel.cuda()
         self.loss = nn.MSELoss().cuda()
-        self.m = nn.AvgPool2d((2, 2), stride=(2, 2))
         
     def forward(self, input, target):
         target = target.float()
-        target_boundary = F.conv2d(target.unsqueeze(1), self.laplacian_kernel, padding=1).squeeze(1)
-        input_boundary = F.conv2d(input.unsqueeze(1), self.laplacian_kernel, padding=1).squeeze(1)
+        target_boundary = F.conv2d(target.unsqueeze(1), self.laplacian_kernel, padding=0).squeeze(1)
+        input_boundary = F.conv2d(input.unsqueeze(1), self.laplacian_kernel, padding=0).squeeze(1)
         
         # input_boundary_2 = self.m(input_boundary.unsqueeze(1)).squeeze(1)
         # target_boundary_2 = self.m(target_boundary.unsqueeze(1)).squeeze(1)
@@ -571,9 +575,9 @@ class Plane_guide_smooth_depth_loss(nn.Module):
     def __init__(self):
         super(Plane_guide_smooth_depth_loss, self).__init__()
         self.number_process_plane = 2
-        self.loss = nn.L1Loss(reduction='sum').cuda()
+        self.loss = nn.L1Loss(reduction='mean').cuda()
 
-    def forward(self, batched_gt_scale_invariant_gradient_preds, depth_smooth_ins_labels):
+    def forward(self, batched_gt_scale_invariant_gradient_preds,batched_gt_scale_invariant_gradient_gts, depth_smooth_ins_labels):
         
         # import os
         # import cv2
@@ -583,50 +587,76 @@ class Plane_guide_smooth_depth_loss(nn.Module):
         #     current_tensor = ((current_tensor - current_tensor.min()) / (current_tensor.max() - current_tensor.min()) * 255).astype(np.uint8)
         #     # current_tensor = cv2.Canny(current_tensor,50,100, 1)
         #     tensor_color = cv2.applyColorMap(current_tensor, cv2.COLORMAP_VIRIDIS)
-        #     tensor_color_path = os.path.join('image_logs/gradient', '{}.png'.format(i))
+        #     tensor_color_path = os.path.join('image_logs/gradient', '{}pred.png'.format(i))
+        #     cv2.imwrite(tensor_color_path, tensor_color)
+            
+        # for i in range(batched_gt_scale_invariant_gradient_gts.shape[0]):
+        #     current_tensor = batched_gt_scale_invariant_gradient_gts[i, :, :].detach().cpu().numpy()
+        #     current_tensor = ((current_tensor - current_tensor.min()) / (current_tensor.max() - current_tensor.min()) * 255).astype(np.uint8)
+        #     # current_tensor = cv2.Canny(current_tensor,50,100, 1)
+        #     tensor_color = cv2.applyColorMap(current_tensor, cv2.COLORMAP_VIRIDIS)
+        #     tensor_color_path = os.path.join('image_logs/gradient', '{}gt.png'.format(i))
         #     cv2.imwrite(tensor_color_path, tensor_color)
         
         depth_smooth_ins_labels = F.interpolate(depth_smooth_ins_labels.unsqueeze(0), scale_factor=4).squeeze(0)
-        depth_smooth_ins_labels = depth_smooth_ins_labels[:, 20:460, 20: 620]
-        batched_gt_scale_invariant_gradient_preds = batched_gt_scale_invariant_gradient_preds[:, 20:460, 20: 620]
         #remove left, right, up, down
         loss = []
         index = np.random.choice(depth_smooth_ins_labels.shape[0], self.number_process_plane, replace=False)
         for i in index:
-            pos_index = depth_smooth_ins_labels[i]> 0
-            
-            x = 100
-            y = 100
+            num_candidate = 0
             count = 0
             while True:
+                pos_index = depth_smooth_ins_labels[i]> 0
+                count += 1
                 if count >= 20:
                     break
-                if pos_index[x, y] == True:
-                    break
+                x = np.random.randint(3, 476, 1)[0]
+                y = np.random.randint(3, 636, 1)[0]
+                
+                if pos_index[x, y] == False:
+                    continue
+                # candidate = pos_index[x-1:x+2, y-1, y+2]
+                pos_index[:x - 2, :] = False
+                pos_index[x + 3:, :] = False
+                pos_index[:, :y - 2] = False
+                pos_index[:, y + 3:] = False
+                
+                list_false = []
+                for m in [x-2, x-1, x, x+1, x+2]:
+                    for n in [y-2, y-1, y, y+1, y+2]:
+                        if pos_index[m, n] == False:
+                            list_false.append((m, n))
+                if len(list_false) > 0:
+                    for k, l in list_false:
+                        pos_index[k+1, l+1] = 0
+                        pos_index[k, l+1] = 0
+                        pos_index[k-1, l+1] = 0
+                        
+                        pos_index[k+1, l] = 0
+                        pos_index[k-1, l] = 0
+                        
+                        pos_index[k, l-1] = 0
+                        pos_index[k+1, l-1] = 0
+                        pos_index[k-1, l-1] = 0
+                        
+                pos_index[:x - 1, :] = False
+                pos_index[x + 2:, :] = False
+                pos_index[:, :y - 1] = False
+                pos_index[:, y + 2:] = False
+                num_candidate = torch.sum(pos_index)
+                if num_candidate < 5:
+                    continue
                 else:
-                    x = np.random.randint(10, 430, 1)[0]
-                    y = np.random.randint(10, 590, 1)[0]
-                count += 1
-            if pos_index[x, y] == False:
+                    break
+            if num_candidate < 5:
                 continue
-            pos_index[:x - 8, :] = False
-            pos_index[x + 8:, :] = False
-            pos_index[:, :y - 8] = False
-            pos_index[:, y + 8:] = False
+            pred_mean = torch.mean(batched_gt_scale_invariant_gradient_preds.squeeze(0)[pos_index])
+            gt_mean = torch.mean(batched_gt_scale_invariant_gradient_gts.squeeze(0)[pos_index])
             
-            num_repeat = torch.sum(pos_index)
-            
-            if num_repeat < 256:
-                continue
-            
-            pos_index[:x - 6, :] = False
-            pos_index[x + 6:, :] = False
-            pos_index[:, :y - 6] = False
-            pos_index[:, y + 6:] = False
             num_repeat = torch.sum(pos_index)
             a = batched_gt_scale_invariant_gradient_preds.squeeze(0)[pos_index]
-            b = torch.mean(batched_gt_scale_invariant_gradient_preds.squeeze(0)[pos_index]).repeat(num_repeat)
-            loss.append(self.loss(a, b))
+            b = pred_mean.repeat(num_repeat)
+            loss.append(self.loss(a, b) + 0.1*self.loss(pred_mean, gt_mean))
         
         return loss
         
