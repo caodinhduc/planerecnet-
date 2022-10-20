@@ -610,20 +610,21 @@ class Plane_guide_smooth_depth_loss(nn.Module):
                 count += 1
                 if count >= 20:
                     break
-                x = np.random.randint(3, 476, 1)[0]
-                y = np.random.randint(3, 636, 1)[0]
+                x = np.random.randint(5, 474, 1)[0]
+                y = np.random.randint(5, 634, 1)[0]
                 
                 if pos_index[x, y] == False:
                     continue
                 # candidate = pos_index[x-1:x+2, y-1, y+2]
-                pos_index[:x - 2, :] = False
-                pos_index[x + 3:, :] = False
-                pos_index[:, :y - 2] = False
-                pos_index[:, y + 3:] = False
+                pos_index[:x - 6, :] = False
+                pos_index[x + 7:, :] = False
+                pos_index[:, :y - 6] = False
+                pos_index[:, y + 7:] = False
                 
                 list_false = []
-                for m in [x-2, x-1, x, x+1, x+2]:
-                    for n in [y-2, y-1, y, y+1, y+2]:
+                # target window : 11x11
+                for m in [x-5, x-4, x-3, x-2, x-1, x, x+1, x+2, x+3, x+4, x+5]:
+                    for n in [y-5, y-4, y-3, y-2, y-1, y, y+1, y+2, y+3, y+4, y+5]:
                         if pos_index[m, n] == False:
                             list_false.append((m, n))
                 if len(list_false) > 0:
@@ -639,10 +640,10 @@ class Plane_guide_smooth_depth_loss(nn.Module):
                         pos_index[k+1, l-1] = 0
                         pos_index[k-1, l-1] = 0
                         
-                pos_index[:x - 1, :] = False
-                pos_index[x + 2:, :] = False
-                pos_index[:, :y - 1] = False
-                pos_index[:, y + 2:] = False
+                pos_index[:x - 5, :] = False
+                pos_index[x + 6:, :] = False
+                pos_index[:, :y - 5] = False
+                pos_index[:, y + 6:] = False
                 num_candidate = torch.sum(pos_index)
                 if num_candidate < 5:
                     continue
