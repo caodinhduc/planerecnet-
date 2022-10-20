@@ -123,7 +123,7 @@ scannet_dataset = dataset_base.copy({
     'eval_images': '../../../data1/duccd/official/',
     'eval_info':   '../../../data1/duccd/scannet_eval.json',
 
-    # Training images and annotations
+    # # Training images and annotations
     # 'train_images': '../scannet/official/',
     # 'train_info':   'scannet_val.json',
 

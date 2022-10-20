@@ -423,13 +423,13 @@ class BoundaryLoss(nn.Module):
         
     def forward(self, input, target):
         target = target.float()
-        target_boundary = F.conv2d(target.unsqueeze(1), self.laplacian_kernel, padding=1).squeeze(1)
-        input_boundary = F.conv2d(input.unsqueeze(1), self.laplacian_kernel, padding=1).squeeze(1)
+        target_boundary = F.conv2d(target.unsqueeze(1), self.laplacian_kernel, padding=0).squeeze(1)
+        input_boundary = F.conv2d(input.unsqueeze(1), self.laplacian_kernel, padding=0).squeeze(1)
         
         # input_boundary_2 = F.interpolate(input_boundary.unsqueeze(1), scale_factor=0.5, mode='bilinear', align_corners=False).squeeze(1)
         # target_boundary_2 = F.interpolate(target_boundary.unsqueeze(1), scale_factor=0.5, mode='bilinear', align_corners=False).squeeze(1)
         
-        #------------------------------------------------------------------------------------------------------------
+        # ------------------------------------------------------------------------------------------------------------
         # import os
         # import cv2
         # import numpy as np
