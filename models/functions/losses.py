@@ -657,8 +657,8 @@ class Plane_guide_smooth_depth_loss(nn.Module):
             num_repeat = torch.sum(pos_index)
             a = batched_gt_scale_invariant_gradient_preds.squeeze(0)[pos_index]
             b = pred_mean.repeat(num_repeat)
-            loss.append(self.loss(a, b) + 0.1*self.loss(pred_mean, gt_mean))
-        
+            loss.append(self.loss(a, b))
+                        #  + 0.1*self.loss(pred_mean, gt_mean))  
         return loss
         
         
