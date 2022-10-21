@@ -576,7 +576,7 @@ class Plane_guide_smooth_depth_loss(nn.Module):
     def __init__(self):
         super(Plane_guide_smooth_depth_loss, self).__init__()
         self.number_process_plane = 5
-        self.loss = nn.L1Loss(reduction='mean').cuda()
+        self.loss = nn.L1Loss(reduction='sum').cuda()
 
     def forward(self, batched_gt_scale_invariant_gradient_preds,batched_gt_scale_invariant_gradient_gts, depth_smooth_ins_labels):
         
@@ -656,7 +656,7 @@ class Plane_guide_smooth_depth_loss(nn.Module):
                 num_repeat = torch.sum(pos_index)
                 a = batched_gt_scale_invariant_gradient_preds.squeeze(0)[pos_index]
                 b = pred_mean.repeat(num_repeat)
-                loss.append(5.0*self.loss(a, b))
+                loss.append(2.0*self.loss(a, b))
             else:
                 continue 
         return loss
