@@ -260,7 +260,7 @@ class PlaneRecNetLoss(nn.Module):
             
             
         # Plane Guide to Smooth Depth
-        batched_gt_scale_invariant_gradient_preds = compute_gradient_map_prediction(depth_preds, valid_mask) / gt_depths.clamp(min=self.depth_resolution)
+        batched_gt_scale_invariant_gradient_preds = compute_gradient_map_prediction(depth_preds, valid_mask) / depth_preds.clamp(min=self.depth_resolution)
         batched_gt_scale_invariant_gradient_gts = compute_gradient_map_prediction(gt_depths, valid_mask) / gt_depths.clamp(min=self.depth_resolution)
         # normalize
         batched_gt_scale_invariant_gradient_preds = batched_gt_scale_invariant_gradient_preds.clamp(max=1.0, min=self.depth_resolution)
