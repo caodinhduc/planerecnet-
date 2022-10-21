@@ -2,6 +2,7 @@ from turtle import pos
 import torch
 import torch.nn.functional as F
 from torch import nn
+import numpy as np
 from torch.autograd import Variable
 from data.config import cfg
 from models.functions.funcs import imrescale, center_of_mass
@@ -570,11 +571,11 @@ class RMSElogLoss(nn.Module):
 
         return loss
 
-import numpy as np
+
 class Plane_guide_smooth_depth_loss(nn.Module):
     def __init__(self):
         super(Plane_guide_smooth_depth_loss, self).__init__()
-        self.number_process_plane = 2
+        self.number_process_plane = 5
         self.loss = nn.L1Loss(reduction='mean').cuda()
 
     def forward(self, batched_gt_scale_invariant_gradient_preds,batched_gt_scale_invariant_gradient_gts, depth_smooth_ins_labels):
@@ -605,6 +606,7 @@ class Plane_guide_smooth_depth_loss(nn.Module):
         for i in index:
             num_candidate = 0
             count = 0
+            is_computed = False
             while True:
                 pos_index = depth_smooth_ins_labels[i]> 0
                 count += 1
@@ -629,36 +631,34 @@ class Plane_guide_smooth_depth_loss(nn.Module):
                             list_false.append((m, n))
                 if len(list_false) > 0:
                     for k, l in list_false:
-                        pos_index[k+1, l+1] = 0
-                        pos_index[k, l+1] = 0
-                        pos_index[k-1, l+1] = 0
+                        pos_index[k+1, l+1] = False
+                        pos_index[k, l+1] = False
+                        pos_index[k-1, l+1] = False
                         
-                        pos_index[k+1, l] = 0
-                        pos_index[k-1, l] = 0
+                        pos_index[k+1, l] = False
+                        pos_index[k-1, l] = False
                         
-                        pos_index[k, l-1] = 0
-                        pos_index[k+1, l-1] = 0
-                        pos_index[k-1, l-1] = 0
+                        pos_index[k, l-1] = False
+                        pos_index[k+1, l-1] = False
+                        pos_index[k-1, l-1] = False
                         
                 pos_index[:x - 5, :] = False
                 pos_index[x + 6:, :] = False
                 pos_index[:, :y - 5] = False
                 pos_index[:, y + 6:] = False
                 num_candidate = torch.sum(pos_index)
-                if num_candidate < 5:
-                    continue
-                else:
+                
+                if num_candidate > 5:
+                    is_computed = True
                     break
-            if num_candidate < 5:
-                continue
-            pred_mean = torch.mean(batched_gt_scale_invariant_gradient_preds.squeeze(0)[pos_index])
-            gt_mean = torch.mean(batched_gt_scale_invariant_gradient_gts.squeeze(0)[pos_index])
-            
-            num_repeat = torch.sum(pos_index)
-            a = batched_gt_scale_invariant_gradient_preds.squeeze(0)[pos_index]
-            b = pred_mean.repeat(num_repeat)
-            loss.append(self.loss(a, b))
-                        #  + 0.1*self.loss(pred_mean, gt_mean))  
+            if is_computed:   
+                pred_mean = torch.mean(batched_gt_scale_invariant_gradient_preds.squeeze(0)[pos_index])
+                num_repeat = torch.sum(pos_index)
+                a = batched_gt_scale_invariant_gradient_preds.squeeze(0)[pos_index]
+                b = pred_mean.repeat(num_repeat)
+                loss.append(5.0*self.loss(a, b))
+            else:
+                continue 
         return loss
         
         
