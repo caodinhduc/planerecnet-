@@ -155,15 +155,7 @@ nyu_eval = dataset_base.copy({
 
     # Evaluation images and annotations.
     'eval_images': '../nyuv2/nyu_images/',
-    'eval_info':   '../nyuv2/nyu_test.json',
-    
-    'train_images': '../nyuv2/nyu_images/',
-    'train_info':   '../nyuv2/nyu_train.json',
-    # Validation images and annotations.
-    # 'valid_images': '../scannet/used_filter_scans/',
-    # 'valid_info':   'filter_scannet_val.json',
-    'valid_images': '../nyuv2/nyu_images/',
-    'valid_info':   '../nyuv2/nyu_test.json',
+    'eval_info':   '../nyuv2/nyu_eval.json',
     
     # Resize scale factor
     'scale_factor': 1,
