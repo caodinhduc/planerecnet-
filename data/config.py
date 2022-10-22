@@ -153,7 +153,7 @@ nyu_eval = dataset_base.copy({
 
     # Evaluation images and annotations.
     'eval_images': '../nyuv2/nyu_images/',
-    'eval_info':   '../nyuv2/nyu_test.json',
+    'eval_info':   '../nyuv2/nyu_eval.json',
     # Resize scale factor
     'scale_factor': 1,
     'min_depth': 1/1000,

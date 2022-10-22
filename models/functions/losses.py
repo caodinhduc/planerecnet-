@@ -1,3 +1,4 @@
+from operator import gt
 from turtle import pos
 import torch
 import torch.nn.functional as F
@@ -51,7 +52,7 @@ class PlaneRecNetLoss(nn.Module):
         self.depth_constraint_inst_loss = LavaLoss()
         self.vnl = VNL_Loss((480,640))
         
-        self.boundary_loss = BoundaryLoss()
+        # self.boundary_loss = BoundaryLoss()
         self.plane_guide_smooth_depth_loss = Plane_guide_smooth_depth_loss()
         
 
@@ -75,22 +76,6 @@ class PlaneRecNetLoss(nn.Module):
         ins_labels = [torch.cat([ins_labels_level_img
                                  for ins_labels_level_img in ins_labels_level], 0)
                       for ins_labels_level in zip(*ins_label_list)]
-
-
-        #------------------------------------------------------------------------------------------------------------
-        # select gt mask for depth smooth loss
-        depth_smooth_ins_labels = [torch.cat([i for i in y]) for y in ins_label_list]
-        # track = ins_labels[1]
-        # import os
-        # import cv2
-        # import numpy as np
-        # for i in range(track.shape[0]):
-        #     current_tensor = track[i, :, :].detach().cpu().numpy()
-        #     current_tensor = ((current_tensor - current_tensor.min()) / (current_tensor.max() - current_tensor.min()) * 255).astype(np.uint8)
-        #     # current_tensor = cv2.Canny(current_tensor,50,100, 1)
-        #     tensor_color = cv2.applyColorMap(current_tensor, cv2.COLORMAP_VIRIDIS)
-        #     tensor_color_path = os.path.join('image_logs/mask', '{}.png'.format(i))
-        #     cv2.imwrite(tensor_color_path, tensor_color)
 
 
         kernel_preds = [[kernel_preds_level_img.view(kernel_preds_level_img.shape[0], -1)[:, grid_orders_level_img]
@@ -140,15 +125,15 @@ class PlaneRecNetLoss(nn.Module):
         losses['ins'] = loss_ins
 
 
-        # Boundary loss
-        loss_boundary = []
-        for input, target in zip(ins_pred_list, ins_labels):
-            if input is None:
-                continue
-            input = torch.sigmoid(input)
-            loss_boundary.append(self.boundary_loss(input, target))
-        loss_bdr_mean = torch.stack(loss_boundary).mean()
-        losses['bdr'] = loss_bdr_mean
+        # # Boundary loss
+        # loss_boundary = []
+        # for input, target in zip(ins_pred_list, ins_labels):
+        #     if input is None:
+        #         continue
+        #     input = torch.sigmoid(input)
+        #     loss_boundary.append(self.boundary_loss(input, target))
+        # loss_bdr_mean = torch.stack(loss_boundary).mean()
+        # losses['bdr'] = loss_bdr_mean
 
         # Classification Loss
         cate_labels = [
@@ -227,6 +212,22 @@ class PlaneRecNetLoss(nn.Module):
             loss_plane_mean = torch.stack(loss_plane).mean()
             losses['pln'] = loss_plane_mean * self.pln_loss_weight
             
+        # Mean Plane Loss
+        window_loss = []
+        B = len(gt_instances)
+        intrinsic_matrix = torch.stack([gt_instances[img_idx]['k_matrix'] for img_idx in range(len(gt_instances))], dim=0)
+        for img_idx in range(0, B):
+            gt_masks = gt_instances[img_idx]['masks'].bool()
+            gt_planes = gt_instances[img_idx]['plane_paras']
+            gt_depth = gt_depths[img_idx]
+            gt_plane_normals = gt_planes[:, :3]
+            gt_plane_offsets = gt_planes[:, 3]
+            k_matrix = intrinsic_matrix[img_idx]
+            window_loss_per_frame = self.plane_guide_smooth_depth_loss(depth_preds[img_idx], gt_masks, gt_plane_normals, gt_depth, k_matrix)
+            window_loss.append(window_loss_per_frame)
+            plane_guide_depth_loss = torch.stack(window_loss).mean()
+        losses['dsl'] = plane_guide_depth_loss
+            
             
         # Depth Gradient Constraint Instance Segmentation Loss
         if cfg.use_lava_loss:
@@ -259,26 +260,7 @@ class PlaneRecNetLoss(nn.Module):
                 loss_lava = torch.tensor([0.])
             losses['lav'] = loss_lava
             
-            
-        # Plane Guide to Smooth Depth
-        batched_gt_scale_invariant_gradient_preds = compute_gradient_map_prediction(depth_preds, valid_mask) / depth_preds.clamp(min=self.depth_resolution)
-        batched_gt_scale_invariant_gradient_gts = compute_gradient_map_prediction(gt_depths, valid_mask) / gt_depths.clamp(min=self.depth_resolution)
-        # normalize
-        batched_gt_scale_invariant_gradient_preds = batched_gt_scale_invariant_gradient_preds.clamp(max=1.0, min=self.depth_resolution)
-        batched_gt_scale_invariant_gradient_gts = batched_gt_scale_invariant_gradient_gts.clamp(max=1.0, min=self.depth_resolution)
-        
-        depth_smooth_loss = []
-        for i in range(len(depth_smooth_ins_labels)):
-            depth_smooth_loss += self.plane_guide_smooth_depth_loss(batched_gt_scale_invariant_gradient_preds[i], batched_gt_scale_invariant_gradient_gts[i], depth_smooth_ins_labels[i])
-        if len(depth_smooth_loss) != 0:
-            depth_smooth_loss_mean = torch.stack(depth_smooth_loss).mean() + 0.001
-        else:
-            depth_smooth_loss_mean = torch.tensor([0.001])
-        losses['dsl'] = depth_smooth_loss_mean
-        return losses
-
-
-
+        return losses   
 
     @torch.no_grad()
     def prepare_ground_truth(self, gt_instances_per_frame, mask_feat_size):
@@ -384,24 +366,6 @@ class LavaLoss(nn.Module):
         loss = lava_loss_per_img.sum() / (gradient_map.sum() * seg_masks.shape[0])
         return loss
 
-def compute_gradient_map_prediction(depth_map, valid_mask=None):
-    '''
-    depth map: 2x1x480x640
-    Compute gradient map from depth map with 3x3 sobel filter
-    '''
-    w = 1
-    laplacian_kernel = torch.zeros((2*w+1, 2*w+1), dtype=torch.float32).reshape(1,1,2*w+1,2*w+1).requires_grad_(False) - 1
-    laplacian_kernel[0,0,w,w] = (2*w+1)*(2*w+1)-1
-    
-    depth_map_padded = F.pad(depth_map, pad=(1,1,1,1), mode='reflect') # Don't use zero padding mode, you know why.
-    gradients = F.conv2d(depth_map_padded, laplacian_kernel, padding=0)
-    
-    gradients = torch.abs(gradients)
-
-    if valid_mask is not None:
-        gradients = gradients * valid_mask
-    
-    return gradients
 
 @torch.no_grad()
 def compute_gradient_map(depth_map, valid_mask=None):
@@ -484,58 +448,6 @@ class BoundaryLoss(nn.Module):
         target_boundary = F.conv2d(target.unsqueeze(1), self.laplacian_kernel, padding=0).squeeze(1)
         input_boundary = F.conv2d(input.unsqueeze(1), self.laplacian_kernel, padding=0).squeeze(1)
         
-        # input_boundary_2 = self.m(input_boundary.unsqueeze(1)).squeeze(1)
-        # target_boundary_2 = self.m(target_boundary.unsqueeze(1)).squeeze(1)
-        
-        #------------------------------------------------------------------------------------------------------------
-        # import os
-        # import cv2
-        # import numpy as np
-        # for i in range(input_boundary.shape[0]):
-        #     current_tensor = input_boundary[i, :, :].detach().cpu().numpy()
-        #     current_tensor = ((current_tensor - current_tensor.min()) / (current_tensor.max() - current_tensor.min()) * 255).astype(np.uint8)
-        #     # current_tensor = cv2.Canny(current_tensor,50,100, 1)
-        #     tensor_color = cv2.applyColorMap(current_tensor, cv2.COLORMAP_VIRIDIS)
-        #     tensor_color_path = os.path.join('image_logs/PR', '{}.png'.format(i))
-        #     cv2.imwrite(tensor_color_path, tensor_color)
-        
-        # for i in range(target_boundary.shape[0]):
-        #     pos = i > 0.1
-        #     i = i*pos
-        #     current_tensor = target_boundary[i, :, :].detach().cpu().numpy()
-        #     current_tensor = ((current_tensor - current_tensor.min()) / (current_tensor.max() - current_tensor.min()) * 255).astype(np.uint8)
-        #     # current_tensor = cv2.Canny(current_tensor,50,100, 1)
-        #     tensor_color = cv2.applyColorMap(current_tensor, cv2.COLORMAP_VIRIDIS)
-        #     tensor_color_path = os.path.join('image_logs/GT', '{}.png'.format(i))
-        #     cv2.imwrite(tensor_color_path, tensor_color)
-            
-        # for i in range(target.shape[0]):
-        #     current_tensor = target[i, :, :].detach().cpu().numpy()
-        #     current_tensor = ((current_tensor - current_tensor.min()) / (current_tensor.max() - current_tensor.min()) * 255).astype(np.uint8)
-        #     # current_tensor = cv2.Canny(current_tensor,50,100, 1)
-        #     tensor_color = cv2.applyColorMap(current_tensor, cv2.COLORMAP_VIRIDIS)
-        #     tensor_color_path = os.path.join('image_logs/target', '{}.png'.format(i))
-        #     cv2.imwrite(tensor_color_path, tensor_color)
-            
-        # for i in range(input.shape[0]):
-        #     current_tensor = input[i, :, :].detach().cpu().numpy()
-        #     current_tensor = ((current_tensor - current_tensor.min()) / (current_tensor.max() - current_tensor.min()) * 255).astype(np.uint8)
-        #     # current_tensor = cv2.Canny(current_tensor,50,100, 1)
-        #     tensor_color = cv2.applyColorMap(current_tensor, cv2.COLORMAP_VIRIDIS)
-        #     tensor_color_path = os.path.join('image_logs/input', '{}.png'.format(i))
-        #     cv2.imwrite(tensor_color_path, tensor_color)
-        
-        #------------------------------------------------------------------------------------------------------------
-        # computer for downscale 2
-        
-        # input2 = input_boundary_2.contiguous().view(input.size()[0], -1)
-        # target2 = target_boundary_2.contiguous().view(target.size()[0], -1).float()
-        # target2 = torch.abs(target2)
-        # input2 = torch.abs(input2)
-        # pos_index2 = (input2 >= 0.25)
-        # input2 = input2[pos_index2]
-        # target2 = target2[pos_index2]
-        
         input = input_boundary.contiguous().view(input.size()[0], -1)
         target = target_boundary.contiguous().view(target.size()[0], -1).float()
         target = torch.abs(target)
@@ -573,92 +485,117 @@ class RMSElogLoss(nn.Module):
 
 
 class Plane_guide_smooth_depth_loss(nn.Module):
-    def __init__(self):
+    def __init__(self, input_size=(480, 640)):
         super(Plane_guide_smooth_depth_loss, self).__init__()
-        self.number_process_plane = 5
-        self.loss = nn.L1Loss(reduction='sum').cuda()
+        self.input_size = input_size
+        self.u0 = torch.tensor(input_size[1] // 2, dtype=torch.float32).cuda() # x, y focal center
+        self.v0 = torch.tensor(input_size[0] // 2, dtype=torch.float32).cuda()
+        self.init_image_coor()
+        
+    def init_image_coor(self): # take care of point cloud
+        x_row = np.arange(0, self.input_size[1])
+        x = np.tile(x_row, (self.input_size[0], 1))
+        x = x[np.newaxis, :, :]
+        x = x.astype(np.float32)
+        x = torch.from_numpy(x.copy()).cuda()
+        self.u_u0 = x - self.u0
 
-    def forward(self, batched_gt_scale_invariant_gradient_preds,batched_gt_scale_invariant_gradient_gts, depth_smooth_ins_labels):
+        y_col = np.arange(0, self.input_size[0])  # y_col = np.arange(0, height)
+        y = np.tile(y_col, (self.input_size[1], 1)).T
+        y = y[np.newaxis, :, :]
+        y = y.astype(np.float32)
+        y = torch.from_numpy(y.copy()).cuda()
+        self.v_v0 = y - self.v0
         
-        # import os
-        # import cv2
-        # import numpy as np
-        # for i in range(batched_gt_scale_invariant_gradient_preds.shape[0]):
-        #     current_tensor = batched_gt_scale_invariant_gradient_preds[i, :, :].detach().cpu().numpy()
-        #     current_tensor = ((current_tensor - current_tensor.min()) / (current_tensor.max() - current_tensor.min()) * 255).astype(np.uint8)
-        #     # current_tensor = cv2.Canny(current_tensor,50,100, 1)
-        #     tensor_color = cv2.applyColorMap(current_tensor, cv2.COLORMAP_VIRIDIS)
-        #     tensor_color_path = os.path.join('image_logs/gradient', '{}pred.png'.format(i))
-        #     cv2.imwrite(tensor_color_path, tensor_color)
-            
-        # for i in range(batched_gt_scale_invariant_gradient_gts.shape[0]):
-        #     current_tensor = batched_gt_scale_invariant_gradient_gts[i, :, :].detach().cpu().numpy()
-        #     current_tensor = ((current_tensor - current_tensor.min()) / (current_tensor.max() - current_tensor.min()) * 255).astype(np.uint8)
-        #     # current_tensor = cv2.Canny(current_tensor,50,100, 1)
-        #     tensor_color = cv2.applyColorMap(current_tensor, cv2.COLORMAP_VIRIDIS)
-        #     tensor_color_path = os.path.join('image_logs/gradient', '{}gt.png'.format(i))
-        #     cv2.imwrite(tensor_color_path, tensor_color)
+    def transfer_xyz(self, depth, k_matrix, valid_mask):
+        fx = k_matrix[0,0]
+        fy = k_matrix[1,1]
+        x = self.u_u0 * torch.abs(depth) / fx
+        y = self.v_v0 * torch.abs(depth) / fy
+        z = depth
+        xx = x[:, valid_mask]
+        yy = y[:, valid_mask]
+        zz = z[:, valid_mask]
+        pw = torch.cat([xx, yy, zz], 0).permute(1, 0)
+        return pw
+    
+    def surface_normal_from_depth(self, depth, k_matrix, valid_mask):
+        """_summary_
+
+        Args:
+            depth (_type_): 1 x 480 x 640
+        """
+        A = self.transfer_xyz(depth, k_matrix, valid_mask)
         
-        depth_smooth_ins_labels = F.interpolate(depth_smooth_ins_labels.unsqueeze(0), scale_factor=4).squeeze(0)
+        b = torch.ones(A.shape[0], 1).cuda()
+        AT = A.clone().transpose(1, 0).cuda()
+        ATA = torch.mm(AT.clone(), A.clone()).cuda()
+        eps_identity = 1e-6 * torch.eye(3, device=ATA.device, dtype=ATA.dtype)
+        ATA += eps_identity
+        
+        try:
+            invert_ATA = torch.linalg.inv(ATA)
+        except:
+            return False
+        numerator = torch.mm(torch.mm(invert_ATA, AT), b)
+        denominator = torch.norm(numerator, dim=0, keepdim=True)
+        return numerator/denominator
+        
+        
+
+    def forward(self, depth_preds, gt_masks, gt_plane_normals, gt_depth, k_matrix):
+        """_summary_
+
+        Args:
+            depth_preds (_type_): 1 x 480 x 640
+            gt_masks (_type_): num_plane x 480 x 640
+            gt_plane_normals (_type_): num_plane x 3
+            gt_depth (_type_): 1 x 480 x 640
+            k_matrix (_type_): 3 x 3
+
+        Returns:
+            _type_: _description_
+        """
+        
         #remove left, right, up, down
         loss = []
-        index = np.random.choice(depth_smooth_ins_labels.shape[0], self.number_process_plane, replace=False)
-        for i in index:
+        if (gt_masks.shape[0]) == 0:
+            return loss
+        for i in range(gt_masks.shape[0]):
             num_candidate = 0
             count = 0
             is_computed = False
             while True:
-                pos_index = depth_smooth_ins_labels[i]> 0
+                pos_index = gt_masks[i]
                 count += 1
                 if count >= 20:
                     break
-                x = np.random.randint(5, 474, 1)[0]
-                y = np.random.randint(5, 634, 1)[0]
+                x = np.random.randint(3, 476, 1)[0]
+                y = np.random.randint(3, 636, 1)[0]
                 
                 if pos_index[x, y] == False:
                     continue
-                # candidate = pos_index[x-1:x+2, y-1, y+2]
-                pos_index[:x - 6, :] = False
-                pos_index[x + 7:, :] = False
-                pos_index[:, :y - 6] = False
-                pos_index[:, y + 7:] = False
-                
-                list_false = []
-                # target window : 11x11
-                for m in [x-5, x-4, x-3, x-2, x-1, x, x+1, x+2, x+3, x+4, x+5]:
-                    for n in [y-5, y-4, y-3, y-2, y-1, y, y+1, y+2, y+3, y+4, y+5]:
-                        if pos_index[m, n] == False:
-                            list_false.append((m, n))
-                if len(list_false) > 0:
-                    for k, l in list_false:
-                        pos_index[k+1, l+1] = False
-                        pos_index[k, l+1] = False
-                        pos_index[k-1, l+1] = False
                         
-                        pos_index[k+1, l] = False
-                        pos_index[k-1, l] = False
-                        
-                        pos_index[k, l-1] = False
-                        pos_index[k+1, l-1] = False
-                        pos_index[k-1, l-1] = False
-                        
-                pos_index[:x - 5, :] = False
-                pos_index[x + 6:, :] = False
-                pos_index[:, :y - 5] = False
-                pos_index[:, y + 6:] = False
+                pos_index[:x - 3, :] = False
+                pos_index[x + 4:, :] = False
+                pos_index[:, :y - 3] = False
+                pos_index[:, y + 4:] = False
                 num_candidate = torch.sum(pos_index)
                 
                 if num_candidate > 5:
                     is_computed = True
                     break
-            if is_computed:   
-                pred_mean = torch.mean(batched_gt_scale_invariant_gradient_preds.squeeze(0)[pos_index])
-                num_repeat = torch.sum(pos_index)
-                a = batched_gt_scale_invariant_gradient_preds.squeeze(0)[pos_index]
-                b = pred_mean.repeat(num_repeat)
-                loss.append(2.0*self.loss(a, b))
-            else:
-                continue 
+            if is_computed:
+                gt_nm = self.surface_normal_from_depth(gt_depth, k_matrix, pos_index.clone())
+                pr_nm = self.surface_normal_from_depth(depth_preds, k_matrix, pos_index.clone())
+                if (gt_nm is False) or (pr_nm is False):
+                    continue
+                abs_err = torch.abs(gt_nm - pr_nm)
+                loss.append(torch.mean(abs_err))
+        if len(loss) != 0:
+            loss = torch.stack(loss).mean()
+        else:
+            loss = torch.tensor([0.001])
         return loss
         
         
