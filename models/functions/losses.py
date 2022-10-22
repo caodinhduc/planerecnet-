@@ -536,11 +536,10 @@ class Plane_guide_smooth_depth_loss(nn.Module):
         eps_identity = 1e-6 * torch.eye(3, device=ATA.device, dtype=ATA.dtype)
         ATA += eps_identity
         
-        # try:
-        #     invert_ATA = torch.linalg.inv(ATA)
-        # except:
-        #     return False
-        invert_ATA = ATA
+        try:
+            invert_ATA = torch.linalg.inv(ATA)
+        except:
+            return False
         numerator = torch.mm(torch.mm(invert_ATA, AT), b)
         numerator = numerator.reshape(3)
         denominator = torch.norm(numerator).repeat(3)
