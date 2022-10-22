@@ -225,7 +225,10 @@ class PlaneRecNetLoss(nn.Module):
             k_matrix = intrinsic_matrix[img_idx]
             window_loss_per_frame = self.plane_guide_smooth_depth_loss(depth_preds[img_idx], gt_masks, gt_plane_normals, gt_depth, k_matrix)
             window_loss += window_loss_per_frame
-            plane_guide_depth_loss = torch.stack(window_loss).mean()
+            if len(window_loss) > 0:
+                plane_guide_depth_loss = torch.stack(window_loss).mean()
+            else:
+                plane_guide_depth_loss = torch.tensor([0.01])
         losses['dsl'] = plane_guide_depth_loss
             
             
@@ -560,7 +563,8 @@ class Plane_guide_smooth_depth_loss(nn.Module):
         Returns:
             _type_: _description_
         """
-        
+        # depth_gt_valid_mask = gt_depth[0] > 1e-4
+        # depth_pr_valid_mask = depth_preds[0] > 1e-4
         #remove left, right, up, down
         loss = []
         if (gt_masks.shape[0]) == 0:
@@ -574,8 +578,8 @@ class Plane_guide_smooth_depth_loss(nn.Module):
                 count += 1
                 if count >= 20:
                     break
-                x = np.random.randint(3, 476, 1)[0]
-                y = np.random.randint(3, 636, 1)[0]
+                x = np.random.randint(4, 475, 1)[0]
+                y = np.random.randint(4, 635, 1)[0]
                 
                 if pos_index[x, y] == False:
                     continue
