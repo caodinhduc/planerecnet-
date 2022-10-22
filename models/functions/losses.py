@@ -224,7 +224,7 @@ class PlaneRecNetLoss(nn.Module):
             gt_plane_offsets = gt_planes[:, 3]
             k_matrix = intrinsic_matrix[img_idx]
             window_loss_per_frame = self.plane_guide_smooth_depth_loss(depth_preds[img_idx], gt_masks, gt_plane_normals, gt_depth, k_matrix)
-            window_loss.append(window_loss_per_frame)
+            window_loss += window_loss_per_frame
             plane_guide_depth_loss = torch.stack(window_loss).mean()
         losses['dsl'] = plane_guide_depth_loss
             
@@ -527,19 +527,23 @@ class Plane_guide_smooth_depth_loss(nn.Module):
         """
         A = self.transfer_xyz(depth, k_matrix, valid_mask)
         
-        b = torch.ones(A.shape[0], 1).cuda()
-        AT = A.clone().transpose(1, 0).cuda()
-        ATA = torch.mm(AT.clone(), A.clone()).cuda()
+        b = torch.ones((A.shape[0], 1)).cuda()
+        AT = A.transpose(1, 0).cuda()
+        ATA = torch.mm(AT, A).cuda()
         eps_identity = 1e-6 * torch.eye(3, device=ATA.device, dtype=ATA.dtype)
         ATA += eps_identity
         
-        try:
-            invert_ATA = torch.linalg.inv(ATA)
-        except:
-            return False
+        # try:
+        #     invert_ATA = torch.linalg.inv(ATA)
+        # except:
+        #     return False
+        invert_ATA = ATA
         numerator = torch.mm(torch.mm(invert_ATA, AT), b)
-        denominator = torch.norm(numerator, dim=0, keepdim=True)
-        return numerator/denominator
+        numerator = numerator.reshape(3)
+        denominator = torch.norm(numerator).repeat(3)
+        denominator = torch.linalg.norm(numerator, dim=0, keepdim=True)
+        eps_denominator = 1e-6*torch.rand(3)
+        return numerator/(denominator + eps_denominator)
         
         
 
@@ -592,10 +596,6 @@ class Plane_guide_smooth_depth_loss(nn.Module):
                     continue
                 abs_err = torch.abs(gt_nm - pr_nm)
                 loss.append(torch.mean(abs_err))
-        if len(loss) != 0:
-            loss = torch.stack(loss).mean()
-        else:
-            loss = torch.tensor([0.001])
         return loss
         
         
