@@ -565,38 +565,40 @@ class Plane_guide_smooth_depth_loss(nn.Module):
         loss = []
         if (gt_masks.shape[0]) == 0:
             return loss
+        
         for i in range(gt_masks.shape[0]):
-            num_candidate = 0
-            count = 0
-            is_computed = False
-            while True:
-                pos_index = gt_masks[i]
-                count += 1
-                if count >= 20:
-                    break
-                x = np.random.randint(6, 473, 1)[0]
-                y = np.random.randint(6, 633, 1)[0]
-                
-                if pos_index[x, y] == False:
-                    continue
-                        
-                pos_index[:x - 5, :] = False
-                pos_index[x + 6:, :] = False
-                pos_index[:, :y - 5] = False
-                pos_index[:, y + 6:] = False
-                num_candidate = torch.sum(pos_index)
-                
-                if num_candidate == 121:
-                    is_computed = True
-                    break
-            if is_computed:
-                gt_nm = self.surface_normal_from_depth(gt_depth, k_matrix, pos_index.clone())
-                pr_nm = self.surface_normal_from_depth(depth_preds, k_matrix, pos_index.clone())
-                if (gt_nm is False) or (pr_nm is False):
-                    continue
-                abs_err = torch.abs(gt_nm - pr_nm)
+            candidate1 = self.random_select_window(gt_masks[i].clone())
+            candidate2 = self.random_select_window(gt_masks[i].clone())
+            if (candidate1 is not False) and (candidate2 is not False):
+                candidate_1 = self.surface_normal_from_depth(depth_preds, k_matrix, candidate1)
+                candidate_2 = self.surface_normal_from_depth(depth_preds, k_matrix, candidate2)
+                abs_err = torch.abs(candidate_1 - candidate_2)
                 loss.append(torch.mean(abs_err))
         return loss
+    
+    def random_select_window(self, gt_mask):
+        count = 0
+        while True:
+            pos_index = gt_mask
+            count += 1
+            if count >= 100:
+                break
+            x = np.random.randint(6, 473, 1)[0]
+            y = np.random.randint(6, 633, 1)[0]
+            
+            if pos_index[x, y] == False:
+                continue
+                    
+            pos_index[:x - 3, :] = False
+            pos_index[x + 4:, :] = False
+            pos_index[:, :y - 3] = False
+            pos_index[:, y + 4:] = False
+            num_candidate = torch.sum(pos_index).int()
+            
+            if num_candidate == 49:
+                return pos_index
+        return False
+        
         
         
         
