@@ -581,7 +581,7 @@ class Plane_guide_smooth_depth_loss(nn.Module):
         while True:
             pos_index = gt_mask
             count += 1
-            if count >= 100:
+            if count >= 50:
                 break
             x = np.random.randint(6, 473, 1)[0]
             y = np.random.randint(6, 633, 1)[0]
