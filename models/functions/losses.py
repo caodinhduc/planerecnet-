@@ -543,11 +543,8 @@ class Plane_guide_smooth_depth_loss(nn.Module):
         numerator = torch.mm(torch.mm(invert_ATA, AT), b)
         numerator = numerator.reshape(3)
         denominator = torch.norm(numerator).repeat(3)
-        denominator = torch.linalg.norm(numerator, dim=0, keepdim=True)
-        eps_denominator = 1e-6*torch.rand(3)
+        eps_denominator = 1e-6*torch.rand(3, device=denominator.device, dtype=denominator.dtype)
         return numerator/(denominator + eps_denominator)
-        
-        
 
     def forward(self, depth_preds, gt_masks, gt_plane_normals, gt_depth, k_matrix):
         """_summary_
@@ -577,19 +574,19 @@ class Plane_guide_smooth_depth_loss(nn.Module):
                 count += 1
                 if count >= 20:
                     break
-                x = np.random.randint(4, 475, 1)[0]
-                y = np.random.randint(4, 635, 1)[0]
+                x = np.random.randint(6, 473, 1)[0]
+                y = np.random.randint(6, 633, 1)[0]
                 
                 if pos_index[x, y] == False:
                     continue
                         
-                pos_index[:x - 3, :] = False
-                pos_index[x + 4:, :] = False
-                pos_index[:, :y - 3] = False
-                pos_index[:, y + 4:] = False
+                pos_index[:x - 5, :] = False
+                pos_index[x + 6:, :] = False
+                pos_index[:, :y - 5] = False
+                pos_index[:, y + 6:] = False
                 num_candidate = torch.sum(pos_index)
                 
-                if num_candidate > 5:
+                if num_candidate == 121:
                     is_computed = True
                     break
             if is_computed:
