@@ -568,13 +568,12 @@ class Plane_guide_smooth_depth_loss(nn.Module):
         
         for i in range(gt_masks.shape[0]):
             candidate1 = self.random_select_window(gt_masks[i].clone())
-            candidate2 = self.random_select_window(gt_masks[i].clone())
-            if (candidate1 is not False) and (candidate2 is not False):
-                candidate_1 = self.surface_normal_from_depth(depth_preds, k_matrix, candidate1)
-                candidate_2 = self.surface_normal_from_depth(depth_preds, k_matrix, candidate2)
-                abs_err = torch.abs(candidate_1 - candidate_2)
-                gt_plane_normal = gt_plane_normals[i]
-                loss.append(torch.mean(abs_err))
+            # candidate2 = self.random_select_window(gt_masks[i].clone())
+            gt_plane_normal = gt_plane_normals[i].reshape(3,1)
+            if (candidate1 is not False):
+                candidate_1 = self.surface_normal_from_depth(depth_preds, k_matrix, candidate1).reshape(3, 1)
+                cossim = torch.abs(F.cosine_similarity(candidate_1, gt_plane_normal, dim=0))
+                loss.append(1 - cossim)
         return loss
     
     def random_select_window(self, gt_mask):
