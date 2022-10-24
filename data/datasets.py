@@ -24,7 +24,7 @@ class PlaneAnnoDataset(data.Dataset):
     Data sample is organized with a extend format of COCO dataset. https://cocodataset.org/#format-data
     """
     def __init__(self, image_path, anno_file, transform=None,
-                 dataset_name=None, has_gt=True, has_pos=True):
+                 dataset_name=None, has_gt=True, has_pos=False):
         from pycocotools.coco import COCO
 
         self.root = image_path
@@ -76,10 +76,11 @@ class PlaneAnnoDataset(data.Dataset):
         depth = cv2.imread(depth_path, cv2.IMREAD_UNCHANGED).astype(np.float32)
 
         if self.has_pos:
-            k_matrix = self.get_camera_matrix(file_name)
-            s = cfg.dataset.scale_factor
-            scale_matrix = np.asarray([[s,0,s],[0,s,s],[0,0,1]])
-            k_matrix = scale_matrix * k_matrix
+            # k_matrix = self.get_camera_matrix(file_name)
+            # s = cfg.dataset.scale_factor
+            # scale_matrix = np.asarray([[s,0,s],[0,s,s],[0,0,1]])
+            # k_matrix = scale_matrix * k_matrix
+            k_matrix = np.zeros((0))
         else:
             k_matrix = np.zeros((0))
 

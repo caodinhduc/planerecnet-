@@ -548,7 +548,7 @@ PlaneRecNet_101_config = PlaneRecNet_base_config.copy(
         }),
 
         'use_lava_loss': True,
-        'use_plane_loss': True,
+        'use_plane_loss': False,
         'lava_weight': 1.0,
         'pln_weight': 1.0,
     }
