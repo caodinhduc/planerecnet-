@@ -581,21 +581,21 @@ class Plane_guide_smooth_depth_loss(nn.Module):
         while True:
             pos_index = gt_mask
             count += 1
-            if count >= 50:
+            if count >= 20:
                 break
-            x = np.random.randint(6, 473, 1)[0]
-            y = np.random.randint(6, 633, 1)[0]
+            x = np.random.randint(16, 463, 1)[0]
+            y = np.random.randint(16, 623, 1)[0]
             
             if pos_index[x, y] == False:
                 continue
                     
-            pos_index[:x - 3, :] = False
-            pos_index[x + 4:, :] = False
-            pos_index[:, :y - 3] = False
-            pos_index[:, y + 4:] = False
+            pos_index[:x - 15, :] = False
+            pos_index[x + 16:, :] = False
+            pos_index[:, :y - 15] = False
+            pos_index[:, y + 16:] = False
             num_candidate = torch.sum(pos_index).int()
             
-            if num_candidate == 49:
+            if num_candidate >= 800:
                 return pos_index
         return False
         
