@@ -391,8 +391,8 @@ class BoundaryLoss(nn.Module):
         
     def forward(self, input, target):
         target = target.float()
-        target_boundary = F.conv2d(target.unsqueeze(1), self.laplacian_kernel, padding=1).squeeze(1)
-        input_boundary = F.conv2d(input.unsqueeze(1), self.laplacian_kernel, padding=1).squeeze(1)
+        target_boundary = F.conv2d(target.unsqueeze(1), self.laplacian_kernel, padding=0).squeeze(1)
+        input_boundary = F.conv2d(input.unsqueeze(1), self.laplacian_kernel, padding=0).squeeze(1)
         
         # input_boundary_2 = self.m(input_boundary.unsqueeze(1)).squeeze(1)
         # target_boundary_2 = self.m(target_boundary.unsqueeze(1)).squeeze(1)
@@ -450,7 +450,7 @@ class BoundaryLoss(nn.Module):
         target = target_boundary.contiguous().view(target.size()[0], -1).float()
         target = torch.abs(target)
         input = torch.abs(input)
-        pos_index = (input >= 0.1)
+        pos_index = (input >= 0.25)
         input = input[pos_index]
         target = target[pos_index]
 
