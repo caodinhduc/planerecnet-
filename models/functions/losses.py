@@ -573,6 +573,7 @@ class Plane_guide_smooth_depth_loss(nn.Module):
                 candidate_1 = self.surface_normal_from_depth(depth_preds, k_matrix, candidate1)
                 candidate_2 = self.surface_normal_from_depth(depth_preds, k_matrix, candidate2)
                 abs_err = torch.abs(candidate_1 - candidate_2)
+                gt_plane_normal = gt_plane_normals[i]
                 loss.append(torch.mean(abs_err))
         return loss
     
