@@ -95,7 +95,7 @@ dataset_base = Config({
 
     # Whether or not to load GT. If this is False, eval.py quantitative evaluation won't work.
     'has_gt': True,
-    'has_pos': True,
+    'has_pos': False,
 
     # A list of names for each of you classes.
     'class_names': PLANE_CLASSES,
@@ -498,7 +498,7 @@ PlaneRecNet_base_config = Config(
         'dice_weight': 3.0,
         'focal_weight': 1.0,
         'depth_weight': 5.0,
-        'use_lava_loss': False,
+        'use_lava_loss': True,
         'use_plane_loss': False,
 
         'lava_weight': 0.5,
