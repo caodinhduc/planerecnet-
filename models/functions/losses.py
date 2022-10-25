@@ -1,6 +1,7 @@
 import torch
 import torch.nn.functional as F
 from torch import nn
+import numpy as np
 from torch.autograd import Variable
 from data.config import cfg
 from models.functions.funcs import imrescale, center_of_mass
