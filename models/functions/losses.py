@@ -223,7 +223,7 @@ class PlaneRecNetLoss(nn.Module):
             gt_plane_normals = gt_planes[:, :3]
             gt_plane_offsets = gt_planes[:, 3]
             k_matrix = intrinsic_matrix[img_idx]
-            window_loss_per_frame = self.plane_guide_smooth_depth_loss(depth_preds[img_idx], gt_masks, gt_plane_normals, gt_depth, k_matrix)
+            window_loss_per_frame = self.plane_guide_smooth_depth_loss(depth_preds[img_idx], gt_masks, gt_plane_normals, k_matrix)
             window_loss += window_loss_per_frame
             if len(window_loss) > 0:
                 plane_guide_depth_loss = torch.stack(window_loss).mean()
@@ -487,6 +487,119 @@ class RMSElogLoss(nn.Module):
         return loss
 
 
+# class Plane_guide_smooth_depth_loss(nn.Module):
+    
+#     def __init__(self, input_size=(480, 640)):
+#         super(Plane_guide_smooth_depth_loss, self).__init__()
+#         self.input_size = input_size
+#         self.u0 = torch.tensor(input_size[1] // 2, dtype=torch.float32).cuda() # x, y focal center
+#         self.v0 = torch.tensor(input_size[0] // 2, dtype=torch.float32).cuda()
+#         self.init_image_coor()
+        
+#     def init_image_coor(self): # take care of point cloud
+#         x_row = np.arange(0, self.input_size[1])
+#         x = np.tile(x_row, (self.input_size[0], 1))
+#         x = x[np.newaxis, :, :]
+#         x = x.astype(np.float32)
+#         x = torch.from_numpy(x.copy()).cuda()
+#         self.u_u0 = x - self.u0
+
+#         y_col = np.arange(0, self.input_size[0])  # y_col = np.arange(0, height)
+#         y = np.tile(y_col, (self.input_size[1], 1)).T
+#         y = y[np.newaxis, :, :]
+#         y = y.astype(np.float32)
+#         y = torch.from_numpy(y.copy()).cuda()
+#         self.v_v0 = y - self.v0
+        
+#     def transfer_xyz(self, depth, k_matrix, valid_mask):
+#         fx = k_matrix[0,0]
+#         fy = k_matrix[1,1]
+#         x = self.u_u0 * torch.abs(depth) / fx
+#         y = self.v_v0 * torch.abs(depth) / fy
+#         z = depth
+#         xx = x[:, valid_mask]
+#         yy = y[:, valid_mask]
+#         zz = z[:, valid_mask]
+#         pw = torch.cat([xx, yy, zz], 0).permute(1, 0)
+#         return pw
+    
+#     def surface_normal_from_depth(self, depth, k_matrix, valid_mask):
+#         """_summary_
+
+#         Args:
+#             depth (_type_): 1 x 480 x 640
+#         """
+#         A = self.transfer_xyz(depth, k_matrix, valid_mask)
+        
+#         b = torch.ones((A.shape[0], 1)).cuda()
+#         AT = A.transpose(1, 0).cuda()
+#         ATA = torch.mm(AT, A).cuda()
+#         eps_identity = 1e-6 * torch.eye(3, device=ATA.device, dtype=ATA.dtype)
+#         ATA += eps_identity
+        
+#         try:
+#             invert_ATA = torch.linalg.inv(ATA)
+#         except:
+#             return False
+#         numerator = torch.mm(torch.mm(invert_ATA, AT), b)
+#         numerator = numerator.reshape(3)
+#         denominator = torch.norm(numerator).repeat(3)
+#         eps_denominator = 1e-6*torch.rand(3, device=denominator.device, dtype=denominator.dtype)
+#         return numerator/(denominator + eps_denominator)
+
+#     def forward(self, depth_preds, gt_masks, gt_plane_normals, gt_depth, k_matrix):
+#         """_summary_
+
+#         Args:
+#             depth_preds (_type_): 1 x 480 x 640
+#             gt_masks (_type_): num_plane x 480 x 640
+#             gt_plane_normals (_type_): num_plane x 3
+#             gt_depth (_type_): 1 x 480 x 640
+#             k_matrix (_type_): 3 x 3
+
+#         Returns:
+#             _type_: _description_
+#         """
+#         # depth_gt_valid_mask = gt_depth[0] > 1e-4
+#         # depth_pr_valid_mask = depth_preds[0] > 1e-4
+#         #remove left, right, up, down
+#         loss = []
+#         if (gt_masks.shape[0]) == 0:
+#             return loss
+        
+#         for i in range(gt_masks.shape[0]):
+#             candidate1 = self.random_select_window(gt_masks[i].clone())
+#             # candidate2 = self.random_select_window(gt_masks[i].clone())
+#             gt_plane_normal = gt_plane_normals[i].reshape(3,1)
+#             if (candidate1 is not False):
+#                 candidate_1 = self.surface_normal_from_depth(depth_preds, k_matrix, candidate1).reshape(3, 1)
+#                 cossim = torch.abs(F.cosine_similarity(candidate_1, gt_plane_normal, dim=0))
+#                 loss.append(1 - cossim)
+#         return loss
+    
+#     def random_select_window(self, gt_mask):
+#         count = 0
+#         while True:
+#             pos_index = gt_mask
+#             count += 1
+#             if count >= 20:
+#                 break
+#             x = np.random.randint(16, 463, 1)[0]
+#             y = np.random.randint(16, 623, 1)[0]
+            
+#             if pos_index[x, y] == False:
+#                 continue
+                    
+#             pos_index[:x - 15, :] = False
+#             pos_index[x + 16:, :] = False
+#             pos_index[:, :y - 15] = False
+#             pos_index[:, y + 16:] = False
+#             num_candidate = torch.sum(pos_index).int()
+            
+#             if num_candidate >= 800:
+#                 return pos_index
+#         return False
+
 class Plane_guide_smooth_depth_loss(nn.Module):
     def __init__(self, input_size=(480, 640)):
         super(Plane_guide_smooth_depth_loss, self).__init__()
@@ -535,7 +648,6 @@ class Plane_guide_smooth_depth_loss(nn.Module):
         ATA = torch.mm(AT, A).cuda()
         eps_identity = 1e-6 * torch.eye(3, device=ATA.device, dtype=ATA.dtype)
         ATA += eps_identity
-        
         try:
             invert_ATA = torch.linalg.inv(ATA)
         except:
@@ -546,7 +658,7 @@ class Plane_guide_smooth_depth_loss(nn.Module):
         eps_denominator = 1e-6*torch.rand(3, device=denominator.device, dtype=denominator.dtype)
         return numerator/(denominator + eps_denominator)
 
-    def forward(self, depth_preds, gt_masks, gt_plane_normals, gt_depth, k_matrix):
+    def forward(self, depth_preds, gt_masks, gt_plane_normals, k_matrix):
         """_summary_
 
         Args:
@@ -559,45 +671,27 @@ class Plane_guide_smooth_depth_loss(nn.Module):
         Returns:
             _type_: _description_
         """
-        # depth_gt_valid_mask = gt_depth[0] > 1e-4
-        # depth_pr_valid_mask = depth_preds[0] > 1e-4
+        depth_pr_valid_mask = depth_preds[0] > 1e-4
         #remove left, right, up, down
         loss = []
         if (gt_masks.shape[0]) == 0:
             return loss
-        
+        random_mask = torch.cuda.FloatTensor(480, 640).uniform_() > 0.985
+        random_mask *= depth_pr_valid_mask
         for i in range(gt_masks.shape[0]):
-            candidate1 = self.random_select_window(gt_masks[i].clone())
-            # candidate2 = self.random_select_window(gt_masks[i].clone())
+            candidate = self.random_select_window(gt_masks[i].clone(), random_mask.clone())
             gt_plane_normal = gt_plane_normals[i].reshape(3,1)
-            if (candidate1 is not False):
-                candidate_1 = self.surface_normal_from_depth(depth_preds, k_matrix, candidate1).reshape(3, 1)
-                cossim = torch.abs(F.cosine_similarity(candidate_1, gt_plane_normal, dim=0))
-                loss.append(1 - cossim)
+            candidate = self.surface_normal_from_depth(depth_preds, k_matrix, candidate).reshape(3, 1)
+            if candidate is False:
+                continue
+            cossim = torch.abs(F.cosine_similarity(candidate, gt_plane_normal, dim=0))
+            loss.append(1 - cossim)
         return loss
     
-    def random_select_window(self, gt_mask):
-        count = 0
-        while True:
-            pos_index = gt_mask
-            count += 1
-            if count >= 20:
-                break
-            x = np.random.randint(16, 463, 1)[0]
-            y = np.random.randint(16, 623, 1)[0]
-            
-            if pos_index[x, y] == False:
-                continue
-                    
-            pos_index[:x - 15, :] = False
-            pos_index[x + 16:, :] = False
-            pos_index[:, :y - 15] = False
-            pos_index[:, y + 16:] = False
-            num_candidate = torch.sum(pos_index).int()
-            
-            if num_candidate >= 800:
-                return pos_index
-        return False
+    def random_select_window(self, gt_mask, random_mask):
+        return gt_mask * random_mask
+
+        
         
         
         
