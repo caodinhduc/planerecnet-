@@ -555,10 +555,8 @@ class Plane_guide_smooth_depth_loss(nn.Module):
             candidate1_gt = candidate1_gt.reshape(3, 1)
             candidate2_gt = candidate2_gt.reshape(3, 1)
             
-            cossim_gt = torch.abs(F.cosine_similarity(candidate1_gt, candidate2_gt, dim=0))
-            cossim = torch.abs(F.cosine_similarity(candidate_1, candidate_2, dim=0))
-            if cossim_gt > 0.99:
-                loss.append(1.0 - cossim)
+            cossim= torch.abs(F.cosine_similarity(candidate_1, candidate1_gt, dim=0))
+            loss.append(1.0 - cossim)
         return loss
     
     def random_select_window(self, gt_mask, random_mask):
