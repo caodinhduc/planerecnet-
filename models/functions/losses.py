@@ -501,8 +501,8 @@ class Plane_guide_smooth_depth_loss(nn.Module):
         b = torch.ones((A.shape[0], 1)).cuda()
         AT = A.transpose(1, 0).cuda()
         ATA = torch.mm(AT, A).cuda()
-        # eps_identity = 1e-6 * torch.eye(3, device=ATA.device, dtype=ATA.dtype)
-        ATA
+        eps_identity = 1e-6 * torch.eye(3, device=ATA.device, dtype=ATA.dtype)
+        ATA += eps_identity
         try:
             invert_ATA = torch.linalg.inv(ATA)
         except:
@@ -541,15 +541,20 @@ class Plane_guide_smooth_depth_loss(nn.Module):
             candidate2 = self.random_select_window(gt_masks[i].clone(), random_mask_2.clone())
             
             gt_plane_normal = gt_plane_normals[i].reshape(3,1)
-            candidate_1 = self.surface_normal_from_depth(depth_preds, k_matrix, candidate1).reshape(3, 1)
-            candidate_2 = self.surface_normal_from_depth(depth_preds, k_matrix, candidate2).reshape(3, 1)
+            candidate_1 = self.surface_normal_from_depth(depth_preds, k_matrix, candidate1)
+            candidate_2 = self.surface_normal_from_depth(depth_preds, k_matrix, candidate2)
             
-            candidate1_gt = self.surface_normal_from_depth(gt_depth, k_matrix, candidate1).reshape(3, 1)
-            candidate2_gt = self.surface_normal_from_depth(gt_depth, k_matrix, candidate2).reshape(3, 1)
+            candidate1_gt = self.surface_normal_from_depth(gt_depth, k_matrix, candidate1)
+            candidate2_gt = self.surface_normal_from_depth(gt_depth, k_matrix, candidate2)
             
             
-            if (candidate_1 is False) or (candidate_2 is False):
+            if (candidate_1 is False) or (candidate_2 is False) or (candidate1_gt is False) or (candidate2_gt is False):
                 continue
+            candidate_1 = candidate_1.reshape(3, 1)
+            candidate_2 = candidate_2.reshape(3, 1)
+            candidate1_gt = candidate1_gt.reshape(3, 1)
+            candidate2_gt = candidate2_gt.reshape(3, 1)
+            
             cossim_gt = torch.abs(F.cosine_similarity(candidate1_gt, candidate2_gt, dim=0))
             cossim = torch.abs(F.cosine_similarity(candidate_1, candidate_2, dim=0))
             if cossim_gt > 0.99:
