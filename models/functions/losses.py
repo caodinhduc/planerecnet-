@@ -545,7 +545,7 @@ class Plane_guide_smooth_depth_loss(nn.Module):
             gt_plane_normal = gt_plane_normals[i].reshape(3,1)
             candidate_1 = self.surface_normal_from_depth(depth_preds, k_matrix, candidate1)
             candidate1_gt = self.surface_normal_from_depth(gt_depth, k_matrix, candidate1)
-                       
+
             if (candidate_1 is False) or (candidate1_gt is False):
                 continue
             candidate_1 = candidate_1.reshape(3, 1)
