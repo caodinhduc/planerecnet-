@@ -198,7 +198,7 @@ class PlaneRecNetLoss(nn.Module):
                 plane_guide_depth_loss = torch.stack(window_loss).mean()
             else:
                 plane_guide_depth_loss = torch.tensor([0.01])
-        losses['dsl'] = plane_guide_depth_loss
+        losses['dsl'] = 5.0*plane_guide_depth_loss
             
             
         # Depth Gradient Constraint Instance Segmentation Loss
@@ -463,6 +463,11 @@ class Plane_guide_smooth_depth_loss(nn.Module):
         self.v0 = torch.tensor(input_size[0] // 2, dtype=torch.float32).cuda()
         self.init_image_coor()
         
+        w = 1
+        self.laplacian_kernel = torch.zeros((2*w+1, 2*w+1), dtype=torch.float32).reshape(1,1,2*w+1,2*w+1).requires_grad_(False) - 1
+        self.laplacian_kernel[0,0,w,w] = (2*w+1)*(2*w+1)-1
+        self.laplacian_kernel.cuda()
+        
     def init_image_coor(self): # take care of point cloud
         x_row = np.arange(0, self.input_size[1])
         x = np.tile(x_row, (self.input_size[0], 1))
@@ -501,10 +506,8 @@ class Plane_guide_smooth_depth_loss(nn.Module):
         b = torch.ones((A.shape[0], 1)).cuda()
         AT = A.transpose(1, 0).cuda()
         ATA = torch.mm(AT, A).cuda()
-        eps_identity = 1e-6 * torch.eye(3, device=ATA.device, dtype=ATA.dtype)
-        ATA += eps_identity
         try:
-            invert_ATA = torch.linalg.inv(ATA)
+            invert_ATA = torch.linalg.pinv(ATA)
         except:
             return False
         numerator = torch.mm(torch.mm(invert_ATA, AT), b)
@@ -535,36 +538,27 @@ class Plane_guide_smooth_depth_loss(nn.Module):
         random_mask_1 *= depth_pr_valid_mask
         random_mask_2 = torch.cuda.FloatTensor(480, 640).uniform_() > 0.985
         random_mask_2 *= depth_pr_valid_mask
-
+        
         for i in range(gt_masks.shape[0]):
-            candidate1 = self.random_select_window(gt_masks[i].clone(), random_mask_1.clone())
-            candidate2 = self.random_select_window(gt_masks[i].clone(), random_mask_2.clone())
+            candidate1 = self.random_select_window(gt_masks[i].clone())
             
             gt_plane_normal = gt_plane_normals[i].reshape(3,1)
             candidate_1 = self.surface_normal_from_depth(depth_preds, k_matrix, candidate1)
-            candidate_2 = self.surface_normal_from_depth(depth_preds, k_matrix, candidate2)
-            
             candidate1_gt = self.surface_normal_from_depth(gt_depth, k_matrix, candidate1)
-            candidate2_gt = self.surface_normal_from_depth(gt_depth, k_matrix, candidate2)
-            
-            
-            if (candidate_1 is False) or (candidate_2 is False) or (candidate1_gt is False) or (candidate2_gt is False):
+                       
+            if (candidate_1 is False) or (candidate1_gt is False):
                 continue
             candidate_1 = candidate_1.reshape(3, 1)
-            candidate_2 = candidate_2.reshape(3, 1)
             candidate1_gt = candidate1_gt.reshape(3, 1)
-            candidate2_gt = candidate2_gt.reshape(3, 1)
-            
             cossim= torch.abs(F.cosine_similarity(candidate_1, candidate1_gt, dim=0))
             loss.append(1.0 - cossim)
         return loss
     
-    def random_select_window(self, gt_mask, random_mask):
-        return gt_mask * random_mask
-
-        
-        
-        
-        
+    def random_select_window(self, gt_mask):
+        gt_mask = gt_mask.unsqueeze(0).unsqueeze(0).float()
+        target_boundary = F.conv2d(gt_mask, self.laplacian_kernel, padding=1).squeeze(0).squeeze(0)
+        target_boundary = torch.abs(target_boundary) > 0.25
+        return target_boundary 
+    
         
 
