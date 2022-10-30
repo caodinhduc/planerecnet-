@@ -198,7 +198,7 @@ class PlaneRecNetLoss(nn.Module):
                 plane_guide_depth_loss = torch.stack(window_loss).mean()
             else:
                 plane_guide_depth_loss = torch.tensor([0.01])
-        losses['dsl'] = 5.0*plane_guide_depth_loss
+        losses['dsl'] = plane_guide_depth_loss
             
             
         # Depth Gradient Constraint Instance Segmentation Loss
