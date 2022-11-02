@@ -198,7 +198,7 @@ class PlaneRecNetLoss(nn.Module):
                 plane_guide_depth_loss = torch.stack(window_loss).mean()
             else:
                 plane_guide_depth_loss = torch.tensor([0.01])
-        losses['dsl'] = plane_guide_depth_loss
+        losses['dsl'] = 5.0 * plane_guide_depth_loss
             
             
         # Depth Gradient Constraint Instance Segmentation Loss
@@ -534,23 +534,20 @@ class Plane_guide_smooth_depth_loss(nn.Module):
         loss = []
         if (gt_masks.shape[0]) == 0:
             return loss
-        random_mask_1 = torch.cuda.FloatTensor(480, 640).uniform_() > 0.985
-        random_mask_1 *= depth_pr_valid_mask
-        random_mask_2 = torch.cuda.FloatTensor(480, 640).uniform_() > 0.985
-        random_mask_2 *= depth_pr_valid_mask
-        
+   
         for i in range(gt_masks.shape[0]):
-            candidate1 = self.random_select_window(gt_masks[i].clone())
-            
+            candidate = self.random_select_window(gt_masks[i].clone())
+            # print(torch.sum(candidate))
+            if torch.sum(candidate) < 10:
+                continue
             gt_plane_normal = gt_plane_normals[i].reshape(3,1)
-            candidate_1 = self.surface_normal_from_depth(depth_preds, k_matrix, candidate1)
-            candidate1_gt = self.surface_normal_from_depth(gt_depth, k_matrix, candidate1)
+            candidate_1 = self.surface_normal_from_depth(depth_preds, k_matrix, candidate)
+            candidate1_gt = self.surface_normal_from_depth(gt_depth, k_matrix, candidate)
 
             if (candidate_1 is False) or (candidate1_gt is False):
                 continue
             candidate_1 = candidate_1.reshape(3, 1)
             candidate1_gt = candidate1_gt.reshape(3, 1)
-            # cossim= torch.abs(F.cosine_similarity(candidate_1, candidate1_gt, dim=0))
             diff = torch.mean(torch.abs(candidate_1 - candidate1_gt))
             loss.append(diff)
         return loss
@@ -559,7 +556,11 @@ class Plane_guide_smooth_depth_loss(nn.Module):
         gt_mask = gt_mask.unsqueeze(0).unsqueeze(0).float()
         target_boundary = F.conv2d(gt_mask, self.laplacian_kernel, padding=1).squeeze(0).squeeze(0)
         target_boundary = torch.abs(target_boundary) > 0.25
-        return target_boundary 
+        valid_mask = torch.zeros_like(target_boundary)
+        valid_mask[80:400, 80:560] = 1.0
+        random_mask = torch.rand(480, 640) > 0.9
+        
+        return target_boundary * valid_mask * random_mask
     
         
 
