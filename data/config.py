@@ -153,7 +153,14 @@ nyu_eval = dataset_base.copy({
 
     # Evaluation images and annotations.
     'eval_images': '../nyuv2/nyu_images/',
-    'eval_info':   '../nyuv2/nyu_eval.json',
+    'eval_info':   '../nyuv2/nyu_test.json',
+    
+    'train_images': '../nyuv2/nyu_images/',
+    'train_info':   '../nyuv2/nyu_train.json',
+
+    'valid_images': '../nyuv2/nyu_images/',
+    'valid_info':   '../nyuv2/nyu_test.json',
+    
     # Resize scale factor
     'scale_factor': 1,
     'min_depth': 1/1000,
@@ -447,7 +454,7 @@ PlaneRecNet_base_config = Config(
         'augment': data_augment,
         
         # Training Settings
-        'max_iter': 125000,
+        'max_iter': 130000,
         'lr_steps': (62500, 100000),
         # dw' = momentum * dw - lr * (grad + decay * w)
         'lr': 1e-4,
@@ -540,7 +547,7 @@ PlaneRecNet_101_config = PlaneRecNet_base_config.copy(
         }),
 
         'use_lava_loss': True,
-        'use_plane_loss': True,
+        'use_plane_loss': False,
         'lava_weight': 1.0,
         'pln_weight': 1.0,
     }

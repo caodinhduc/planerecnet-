@@ -24,7 +24,7 @@ class PlaneAnnoDataset(data.Dataset):
     Data sample is organized with a extend format of COCO dataset. https://cocodataset.org/#format-data
     """
     def __init__(self, image_path, anno_file, transform=None,
-                 dataset_name=None, has_gt=True, has_pos=True):
+                 dataset_name=None, has_gt=True, has_pos=False):
         from pycocotools.coco import COCO
 
         self.root = image_path
@@ -65,7 +65,6 @@ class PlaneAnnoDataset(data.Dataset):
         else:
             target = []
         file_name = self.coco.loadImgs(img_id)[0]['file_name']
-        # print(file_name)
         path = osp.join(self.root, file_name)
         assert osp.exists(path), 'Image path does not exist: {}'.format(path)
 
@@ -81,6 +80,7 @@ class PlaneAnnoDataset(data.Dataset):
             s = cfg.dataset.scale_factor
             scale_matrix = np.asarray([[s,0,s],[0,s,s],[0,0,1]])
             k_matrix = scale_matrix * k_matrix
+            k_matrix = np.zeros((0))
         else:
             k_matrix = np.zeros((0))
 
@@ -98,7 +98,8 @@ class PlaneAnnoDataset(data.Dataset):
                 plane_paras = self.get_plane_para(target)
                 plane_paras = np.array(plane_paras)
             else:
-                plane_paras = np.zeros((0))
+                plane_paras = self.get_plane_para(target)
+                plane_paras = np.array(plane_paras)
 
         if self.transform is not None:
             if len(target) > 0:
@@ -219,7 +220,7 @@ class ScanNetDataset(PlaneAnnoDataset):
 class NYUDataset(PlaneAnnoDataset):
 
     def __init__(self, image_path, anno_file, transform=None,
-                 dataset_name=None, has_gt=True, has_pos=True):
+                 dataset_name=None, has_gt=True, has_pos=False):
         super(NYUDataset, self).__init__(image_path, anno_file, transform, dataset_name, has_gt, has_pos)
     
     def get_depth_path(self, rgb_file_name):
@@ -227,7 +228,8 @@ class NYUDataset(PlaneAnnoDataset):
         depth_file_name = rgb_file_name.replace(".jpg", ".png")
         depth_path = osp.join(depth_root, depth_file_name)
         return depth_path
-
+    def get_plane_para(self, target):
+        return [list(np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0])) for obj in target]
 
 class S2D3DSDataset(PlaneAnnoDataset):
 
@@ -259,10 +261,8 @@ class S2D3DSDataset(PlaneAnnoDataset):
 def detection_collate(batch):
     """Custom collate fn for dealing with batches of images that have a different
     number of associated object annotations (bounding boxes).
-
     Arguments:
         batch: (tuple) A tuple of tensor images, depth maps and list of instances(dict)
-
     Return:
         A tuple containing:
             1) (tensor) batch of images stacked on their 0 dim
