@@ -154,14 +154,14 @@ nyu_eval = dataset_base.copy({
     'name': 'NYUDataset',
 
     # Evaluation images and annotations.
-    'eval_images': '../nyuv2/nyu_images/',
-    'eval_info':   '../nyuv2/nyu_test.json',
+    'eval_images': '../../../data1/duccd/nyuv2/nyu_images/',
+    'eval_info':   '../../../data1/duccd/nyuv2/nyu_test.json',
     
-    'train_images': '../nyuv2/nyu_images/',
-    'train_info':   '../nyuv2/nyu_train.json',
+    'train_images': '../../../data1/duccd/nyuv2/nyu_images/',
+    'train_info':   '../../../data1/duccd/nyuv2/nyu_train.json',
 
-    'valid_images': '../nyuv2/nyu_images/',
-    'valid_info':   '../nyuv2/nyu_test.json',
+    'valid_images': '../../../data1/duccd/nyuv2/nyu_images/',
+    'valid_info':   '../../../data1/duccd/nyuv2/nyu_test.json',
     
     # Resize scale factor
     'scale_factor': 1,
