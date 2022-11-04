@@ -159,9 +159,7 @@ nyu_eval = dataset_base.copy({
     
     'train_images': '../nyuv2/nyu_images/',
     'train_info':   '../nyuv2/nyu_train.json',
-    # Validation images and annotations.
-    # 'valid_images': '../scannet/used_filter_scans/',
-    # 'valid_info':   'filter_scannet_val.json',
+
     'valid_images': '../nyuv2/nyu_images/',
     'valid_info':   '../nyuv2/nyu_test.json',
     
@@ -455,7 +453,7 @@ PlaneRecNet_base_config = Config(
         'augment': data_augment,
         
         # Training Settings
-        'max_iter': 125000,
+        'max_iter': 130000,
         'lr_steps': (62500, 100000),
         # dw' = momentum * dw - lr * (grad + decay * w)
         'lr': 1e-4,

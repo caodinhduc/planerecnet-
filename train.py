@@ -43,7 +43,7 @@ parser.add_argument('--start_iter', default=-1, type=int,
                          'determined from the file name.')
 parser.add_argument('--validation_size', default=2000, type=int,
                     help='The number of images to use for validation.')
-parser.add_argument('--validation_epoch', default=2, type=int,
+parser.add_argument('--validation_epoch', default=10, type=int,
                     help='Output validation information every n iterations. If -1, do no validation.')
 parser.add_argument('--no_tensorboard', dest='no_tensorboard', action='store_true',
                     help='Whether visualize training loss, validation loss and outputs with tensorboard.')
@@ -117,7 +117,8 @@ if args.batch_size // torch.cuda.device_count() < 6:
         print('Per-GPU batch size is less than the recommended limit for batch norm. Disabling batch norm.')
     cfg.freeze_bn = True
 
-loss_types = ['ins', 'lav', 'cat', 'dpt', 'pln', 'bdr']
+loss_types = ['ins', 'lav', 'cat', 'dpt', 'pln']
+# loss_types = ['ins', 'lav', 'cat', 'dpt', 'pln', 'bdr']
 
 if torch.cuda.is_available():
     torch.set_default_tensor_type('torch.cuda.FloatTensor')
