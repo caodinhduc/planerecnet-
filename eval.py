@@ -105,7 +105,7 @@ def evaluate(net: PlaneRecNet, dataset, during_training=False, eval_nums=-1):
                 gt_masks = gt_masks.float()
                 compute_segmentation_metrics(ap_data, gt_masks, gt_boxes, gt_classes, pred_masks, pred_boxes, pred_classes, pred_scores)
                 
-                valid_mask = gt_depth > 1e-4
+                valid_mask = pred_depth > 1e-4
                 ri, voi, sc = evaluateMasksTensor(pred_masks, gt_masks, valid_mask)
                 RI.append(float(ri))
                 VOI.append(float(voi))
