@@ -558,7 +558,7 @@ class SOLOv2MaskHead(nn.Module):
     def forward(self, x, depth_features):
         depth_features = F.interpolate(depth_features, scale_factor=0.5, mode='bilinear', align_corners=False, recompute_scale_factor=False)
         depth_features = self.sablock(self.conv1x1(depth_features))
-        mask_pred = self.conv_pred(x + depth_features)
+        mask_pred = self.conv_pred(x)
         return mask_pred
 
 
@@ -673,7 +673,7 @@ class Depth_Pred(nn.Module):
     def forward(self, x, mask_features):
         mask_features = F.interpolate(mask_features, scale_factor=2, mode='bilinear', align_corners=False, recompute_scale_factor=False)
         mask_features = self.sablock(self.conv1x1(mask_features))
-        x = self.deconv(x)
+        x = self.deconv(x + mask_features)
         x = self.depth_pred(x)
 
         return x
