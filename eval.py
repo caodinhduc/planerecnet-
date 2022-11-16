@@ -80,7 +80,7 @@ def evaluate(net: PlaneRecNet, dataset, during_training=False, eval_nums=-1):
     RI = []
     VOI = []
     SC = []
-
+    overlap = []
     try:
         # Main eval loop
         for it, image_idx in enumerate(dataset_indices):
@@ -100,16 +100,14 @@ def evaluate(net: PlaneRecNet, dataset, during_training=False, eval_nums=-1):
             depth_error_per_frame = compute_depth_metrics(pred_depth, gt_depth, pred_masks, median_scaling=True, only_plane_areas=False)
             infos.append(depth_error_per_frame)
 
+            overlap_mask = torch.zeros(480, 640)
             if pred_masks is not None:
                 pred_masks = pred_masks.float()
                 gt_masks = gt_masks.float()
-                compute_segmentation_metrics(ap_data, gt_masks, gt_boxes, gt_classes, pred_masks, pred_boxes, pred_classes, pred_scores)
-                
-                valid_mask = pred_depth > 1e-4
-                ri, voi, sc = evaluateMasksTensor(pred_masks, gt_masks, valid_mask)
-                RI.append(float(ri))
-                VOI.append(float(voi))
-                SC.append(float(sc))
+                for m in pred_masks:
+                    overlap_mask += m
+            overlap_mask = overlap_mask > 1
+            overlap.append(torch.sum(overlap_mask.float()/(480*640)))
             # First couple of images take longer because we're constructing the graph.
             # Since that's technically initialization, don't include those in the FPS calculations.
             if it > 1:
@@ -124,21 +122,7 @@ def evaluate(net: PlaneRecNet, dataset, during_training=False, eval_nums=-1):
                 progress_bar.set_val(it+1)
                 print('\rProcessing Images  %s %6d / %6d (%5.2f%%)    %5.2f fps        '
                       % (repr(progress_bar), it+1, eval_nums, progress, fps), end='')
-        calc_map(ap_data)
-        infos = np.asarray(infos, dtype=np.double)
-        infos = infos.sum(axis=0)/infos.shape[0]
-        print()
-        print("Depth Metrics:")
-        print("{}: {:.5f}, {}: {:.5f}, {}: {:.5f}, {}: {:.5f}, {}: {:.5f}, {}: {:.5f}, {}: {:.5f} \n{}: {:.5f}".format(
-            depth_metrics[0], infos[0], depth_metrics[1], infos[1], depth_metrics[2], infos[2],
-            depth_metrics[3], infos[3], depth_metrics[4], infos[4], depth_metrics[5], infos[5],
-            depth_metrics[6], infos[6], depth_metrics[7], infos[7]
-        ))
-        
-        print("ri: ", np.mean(RI))
-        print("VOI: ", np.mean(VOI))
-        print("SC: ", np.mean(SC))
-
+        print('overlapping rate: ', torch.mean(torch.stack(overlap)))
     except KeyboardInterrupt:
         print('Stopping...')
 
