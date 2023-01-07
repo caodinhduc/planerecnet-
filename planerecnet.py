@@ -16,6 +16,7 @@ from models.fpn import FPN
 from models.backbone import construct_backbone
 from data.augmentations import FastBaseTransform
 from attention import SABlock
+from swin_transformer import SwinTransformerBlock, PatchEmbed
 
 torch.cuda.current_device()
 
@@ -632,13 +633,36 @@ class DepthAggregator_FPN(nn.Module):
             nn.ReLU(inplace=True)
         )
 
+        self.swin_transformer_1 = SwinTransformerBlock(dim=256, window_size=5, input_resolution=(15, 20), num_heads=2)
+        self.patch_embed_1 = PatchEmbed(img_size=(15, 20), patch_size=1, in_chans=256, embed_dim=256)
+        
+        self.swin_transformer_2 = SwinTransformerBlock(dim=128, window_size=5, input_resolution=(15, 20), num_heads=2)
+        self.patch_embed_2 = PatchEmbed(img_size=(30, 40), patch_size=2, in_chans=256, embed_dim=128)
+        
+        self.swin_transformer_3 = SwinTransformerBlock(dim=128, window_size=5, input_resolution=(30, 40), num_heads=2)
+        self.patch_embed_3 = PatchEmbed(img_size=(60, 80), patch_size=2, in_chans=256, embed_dim=128)
+        
+        self.swin_transformer_4 = SwinTransformerBlock(dim=128, window_size=5, input_resolution=(60, 80), num_heads=2)
+        self.patch_embed_4 = PatchEmbed(img_size=(120, 160), patch_size=2, in_chans=256, embed_dim=128)
+
     def forward(self, feature_maps):
         
         feats = list(reversed(feature_maps))
-        x = self.deconv1(self.conv1(self.latlayer1(feats[0]))) 
-        x = self.deconv2(torch.cat([self.conv2(self.latlayer2(feats[1])), x], dim=1))
-        x = self.deconv3(torch.cat([self.conv3(self.latlayer3(feats[2])), x], dim=1))
-        x = self.deconv4(torch.cat([self.conv4(self.latlayer4(feats[3])), x], dim=1))
+        latlayer1 = self.latlayer1(feats[0])
+        latlayer2 = self.latlayer2(feats[1])
+        latlayer3 = self.latlayer3(feats[2])
+        latlayer4 = self.latlayer4(feats[3])
+        # 1x256x ...
+        
+        transformer_1 = self.swin_transformer_1(self.patch_embed_1(latlayer1)) # 15 x 20
+        transformer_2 = self.swin_transformer_2(self.patch_embed_2(latlayer2)) # 15 x 20
+        transformer_3 = self.swin_transformer_3(self.patch_embed_3(latlayer3)) # 30 x 40
+        transformer_4 = self.swin_transformer_4(self.patch_embed_4(latlayer4)) # 60 x 80
+        
+        x = self.deconv1(self.conv1(latlayer1) + transformer_1) 
+        x = self.deconv2(torch.cat([self.conv2(latlayer2) + F.interpolate(transformer_2, scale_factor=2, mode='bilinear', align_corners=False), x], dim=1))
+        x = self.deconv3(torch.cat([self.conv3(latlayer3) + F.interpolate(transformer_3, scale_factor=2, mode='bilinear', align_corners=False), x], dim=1))
+        x = self.deconv4(torch.cat([self.conv4(latlayer4) + F.interpolate(transformer_4, scale_factor=2, mode='bilinear', align_corners=False), x], dim=1))
         return x
 
 class Depth_Pred(nn.Module):
