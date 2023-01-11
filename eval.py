@@ -80,7 +80,7 @@ def evaluate(net: PlaneRecNet, dataset, during_training=False, eval_nums=-1):
     RI = []
     VOI = []
     SC = []
-
+    plane_guide_smooth_depth_loss = Plane_guide_smooth_depth_loss()
     try:
         # Main eval loop
         for it, image_idx in enumerate(dataset_indices):
@@ -97,6 +97,11 @@ def evaluate(net: PlaneRecNet, dataset, during_training=False, eval_nums=-1):
             pred_masks, pred_boxes, pred_classes, pred_scores, pred_depth = [v for k, v in result.items()]
 
             gt_depth = gt_depth.cuda()
+            
+            # visualize the point cloud of each plane here
+            visualize = plane_guide_smooth_depth_loss(pred_depth[0], gt_depth, gt_masks, gt_planes, k_matrices)
+            
+            
             depth_error_per_frame = compute_depth_metrics(pred_depth, gt_depth, pred_masks, median_scaling=True, only_plane_areas=False)
             infos.append(depth_error_per_frame)
 
@@ -415,6 +420,159 @@ def print_maps(all_maps):
                                      x for x in all_maps[iou_type].values()]))
     print(make_sep(len(all_maps['box']) + 1))
     print()
+    
+    
+class Plane_guide_smooth_depth_loss(nn.Module):
+    def __init__(self, input_size=(480, 640)):
+        super(Plane_guide_smooth_depth_loss, self).__init__()
+        self.input_size = input_size
+        self.u0 = torch.tensor(input_size[1] // 2, dtype=torch.float32).cuda() # x, y focal center
+        self.v0 = torch.tensor(input_size[0] // 2, dtype=torch.float32).cuda()
+        self.init_image_coor()
+        
+        w = 1
+        self.laplacian_kernel = torch.zeros((2*w+1, 2*w+1), dtype=torch.float32).reshape(1,1,2*w+1,2*w+1).requires_grad_(False) - 1
+        self.laplacian_kernel[0,0,w,w] = (2*w+1)*(2*w+1)-1
+        self.laplacian_kernel.cuda()
+        
+    def init_image_coor(self): # take care of point cloud
+        x_row = np.arange(0, self.input_size[1])
+        x = np.tile(x_row, (self.input_size[0], 1))
+        x = x[np.newaxis, :, :]
+        x = x.astype(np.float32)
+        x = torch.from_numpy(x.copy()).cuda()
+        self.u_u0 = x - self.u0
+
+        y_col = np.arange(0, self.input_size[0])  # y_col = np.arange(0, height)
+        y = np.tile(y_col, (self.input_size[1], 1)).T
+        y = y[np.newaxis, :, :]
+        y = y.astype(np.float32)
+        y = torch.from_numpy(y.copy()).cuda()
+        self.v_v0 = y - self.v0
+        
+    def transfer_xyz(self, depth, k_matrix, valid_mask):
+        fx = k_matrix[0,0]/1000.0
+        fy = k_matrix[1,1]/1000.0
+        x = self.u_u0 * torch.abs(depth) / fx
+        y = self.v_v0 * torch.abs(depth) / fy
+        z = depth
+        pw = torch.cat([x, y, z], 0).permute(1, 2, 0)
+        return pw
+    
+    def surface_normal_from_depth(self, depth, k_matrix, valid_mask):
+        """_summary_
+        Args:
+            depth (_type_): 1 x 480 x 640
+        """
+        A = self.transfer_xyz(depth, k_matrix, valid_mask)
+        
+        b = torch.ones((A.shape[0], 1)).cuda()
+        AT = A.transpose(1, 0).cuda()
+        ATA = torch.mm(AT, A).cuda()
+        try:
+            invert_ATA = torch.linalg.pinv(ATA)
+        except:
+            return False
+        numerator = torch.mm(torch.mm(invert_ATA, AT), b)
+        numerator = numerator.reshape(3)
+        denominator = torch.norm(numerator).repeat(3)
+        eps_denominator = 1e-6*torch.rand(3, device=denominator.device, dtype=denominator.dtype)
+        return numerator/(denominator + eps_denominator)
+
+    def forward(self, depth_pred, gt_depth, gt_masks, gt_plane_normals, k_matrix):
+        """_summary_
+        Args:
+            depth_preds (_type_): 1 x 480 x 640
+            gt_masks (_type_): num_plane x 480 x 640
+            gt_plane_normals (_type_): num_plane x 3
+            gt_depth (_type_): 1 x 480 x 640
+            k_matrix (_type_): 3 x 3
+        Returns:
+            _type_: _description_
+        """
+        depth_pr_valid_mask = depth_pred[0] > cfg.dataset.min_depth
+        gt_3d_points = self.transfer_xyz(gt_depth, k_matrix, depth_pr_valid_mask)
+        gt_3d_points_pred = self.transfer_xyz(depth_pred, k_matrix, depth_pr_valid_mask)
+
+        loss = []
+        # loss_gt = []
+        if (gt_masks.shape[0]) == 0:
+            return loss
+   
+        for i in range(gt_masks.shape[0]):
+            candidate = self.random_select_points(gt_masks[i].clone())
+            self.save_mask(gt_masks[i].clone(), i)
+            points = gt_3d_points[candidate]
+            # points_pred = gt_3d_points_pred[candidate]
+            try:
+                plane_equation = self.estimate_plane_equation(points)
+                # debuging
+                # self.visualise(plane_equation, points, points_pred, i)
+            except:
+                continue
+            
+            measure_gt = self.measure_distance(plane_equation, gt_3d_points.reshape(-1, 3)).reshape(480, 640) * gt_masks[i].clone()
+            self.save_mask(measure_gt.clone(), str(i) + "_distance")
+            measure_gt = torch.mean(measure_gt)
+            measure_gt = np.float(measure_gt.detach().cpu().numpy())
+            loss.append(measure_gt)
+        return loss
+    
+        
+    def estimate_plane_equation(self, points):
+        """_summary_
+        Args:
+            points (_type_): num_sample x 3
+        Returns:
+            _type_: _description_
+        """
+        # print(points.shape)
+        points = points.detach().cpu().numpy()
+        num_sample = points.shape[0]
+        A = np.matrix(np.column_stack((points[:, 0], points[:, 1], np.ones((num_sample, 1)))))
+        b = np.matrix(points[:, 2].reshape(num_sample, 1))
+        fit = (A.T * A).I * A.T * b
+        return fit
+    
+    def random_select_points(self, gt_mask):
+        random_mask = torch.rand(480, 640) > 0.95
+        return gt_mask * random_mask
+    
+    def measure_distance(self, fit, point):
+        # 88283 x 3
+        point = torch.column_stack((point, torch.ones(point.shape[0], 1)))
+        A = np.asarray(fit[0]).reshape(-1)[0]
+        B = np.asarray(fit[1]).reshape(-1)[0]
+        C = torch.tensor(-1.0)
+        D = np.asarray(fit[2]).reshape(-1)[0]
+        t = torch.tensor([A, B, C, D])
+        num = torch.abs(torch.sum(t * point, dim=1))
+        den = torch.sqrt(torch.sum(torch.square(t)))
+        return num/(den + 1e-6)
+
+    def visualise(self, fit, gt_points, pred_points, i):
+        A = np.asarray(fit[0]).reshape(-1)[0]
+        B = np.asarray(fit[1]).reshape(-1)[0]
+        C = -1.0
+        D = np.asarray(fit[2]).reshape(-1)[0]
+        
+        gt_points = gt_points.detach().cpu().numpy()
+        pred_points = pred_points.detach().cpu().numpy()
+        np.savetxt("image_logs/txt/gt{}.txt".format(i), gt_points)
+        np.savetxt("image_logs/txt/pr{}.txt".format(i), pred_points)
+        np.savetxt("image_logs/txt/abcd{}.txt".format(i), np.array([A, B, C, D]))
+        # ax = plt.axes(projection="3d")
+        # ax.scatter(gt_points[0], gt_points[1], gt_points[2])
+        # plt.show()
+        # print()
+        
+    def save_mask(self, mask, index):
+        current_tensor = mask.detach().cpu().numpy()
+        current_tensor = ((current_tensor - current_tensor.min()) / (current_tensor.max() - current_tensor.min()) * 255).astype(np.uint8)
+        # current_tensor = cv2.Canny(current_tensor,50,100, 1)
+        tensor_color = cv2.applyColorMap(current_tensor, cv2.COLORMAP_VIRIDIS)
+        tensor_color_path = os.path.join('image_logs/gt_mask', '{}.png'.format(index))
+        cv2.imwrite(tensor_color_path, tensor_color)
 
 
 if __name__ == '__main__':
