@@ -208,6 +208,24 @@ class PlaneRecNetLoss(nn.Module):
             losses['pln'] = loss_plane_mean * self.pln_loss_weight
             
             
+        # Plane guide depth loss
+        window_loss = []
+        B = len(gt_instances)
+        intrinsic_matrix = torch.stack([gt_instances[img_idx]['k_matrix'] for img_idx in range(len(gt_instances))], dim=0)
+        for img_idx in range(0, B):
+            gt_masks = gt_instances[img_idx]['masks'].bool()
+            gt_planes = gt_instances[img_idx]['plane_paras']
+            gt_plane_normals = gt_planes[:, :3]
+            k_matrix = intrinsic_matrix[img_idx]
+            window_loss_per_frame = self.plane_guide_smooth_depth_loss(depth_preds[img_idx], gt_depths[img_idx], gt_masks, gt_plane_normals, k_matrix)
+            window_loss += window_loss_per_frame
+            if len(window_loss) > 0:
+                plane_guide_depth_loss = torch.stack(window_loss).mean()
+            else:
+                plane_guide_depth_loss = torch.tensor([0.01])
+        losses['pgd'] = 2.0 * plane_guide_depth_loss
+            
+            
         # Depth Gradient Constraint Instance Segmentation Loss
         if cfg.use_lava_loss:
             loss_lava = []
