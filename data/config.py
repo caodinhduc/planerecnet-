@@ -125,16 +125,16 @@ scannet_dataset = dataset_base.copy({
     'eval_info':   '../../../data1/duccd/scannet_eval.json',
 
     # Training images and annotations
-    # 'train_images': '../scannet/used_filter_scans/',
-    # 'train_info':   'filter_scannet_train.json',
+    'train_images': '../scannet/official/',
+    'train_info':   'scannet_eval.json',
  
     # Validation images and annotations.
-    # 'valid_images': '../scannet/used_filter_scans/',
-    # 'valid_info':   'filter_scannet_val.json',
+    'valid_images': '../scannet/official/',
+    'valid_info':   'scannet_eval.json',
 
     # Evaluation images and annotations.
-    # 'eval_images': '../scannet/official/',
-    # 'eval_info':   'scannet_eval.json',
+    'eval_images': '../scannet/official/',
+    'eval_info':   'scannet_eval.json',
 
     
 
@@ -539,8 +539,8 @@ PlaneRecNet_101_config = PlaneRecNet_base_config.copy(
             'fpn_instance_strides': [8, 8, 16, 32],
         }),
 
-        'use_lava_loss': True,
-        'use_plane_loss': True,
+        'use_lava_loss': False,
+        'use_plane_loss': False,
         'lava_weight': 1.0,
         'pln_weight': 1.0,
     }
