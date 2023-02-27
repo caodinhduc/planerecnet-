@@ -459,6 +459,10 @@ class PGD(nn.Module):
         y = self.v_v0 * torch.abs(depth) / fy
         z = depth
         pw = torch.cat([x, y, z], 0).permute(1, 2, 0)
+        
+        # log for debugging
+        # pw = pw.detach().cpu().numpy().reshape(-1, 3)
+        # np.savetxt('pc_debug.txt', pw)
         return pw
     
     def surface_normal_from_depth(self, depth, k_matrix, valid_mask):
@@ -577,3 +581,7 @@ class PGD(nn.Module):
         tensor_color = cv2.applyColorMap(current_tensor, cv2.COLORMAP_VIRIDIS)
         tensor_color_path = os.path.join('image_logs/gt_mask', '{}.png'.format(index))
         cv2.imwrite(tensor_color_path, tensor_color)
+    
+    def select_center(mask):
+        x = np.mean(np.where(mask==True)[0])
+        y = np.mean(np.where(mask==True)[1])
