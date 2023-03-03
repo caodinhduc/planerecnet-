@@ -148,15 +148,15 @@ def evaluate(net: PlaneRecNet, dataset, during_training=False, eval_nums=-1):
         ))
         
         
-        gt_infos = np.asarray(gt_infos, dtype=np.double)
-        gt_infos = gt_infos.sum(axis=0)/gt_infos.shape[0]
-        print()
-        print("Depth gt plane:")
-        print("{}: {:.5f}, {}: {:.5f}, {}: {:.5f}, {}: {:.5f}, {}: {:.5f}, {}: {:.5f}, {}: {:.5f} \n{}: {:.5f}".format(
-            depth_metrics[0], gt_infos[0], depth_metrics[1], gt_infos[1], depth_metrics[2], gt_infos[2],
-            depth_metrics[3], gt_infos[3], depth_metrics[4], gt_infos[4], depth_metrics[5], gt_infos[5],
-            depth_metrics[6], gt_infos[6], depth_metrics[7], gt_infos[7]
-        ))
+        # gt_infos = np.asarray(gt_infos, dtype=np.double)
+        # gt_infos = gt_infos.sum(axis=0)/gt_infos.shape[0]
+        # print()
+        # print("Depth gt plane:")
+        # print("{}: {:.5f}, {}: {:.5f}, {}: {:.5f}, {}: {:.5f}, {}: {:.5f}, {}: {:.5f}, {}: {:.5f} \n{}: {:.5f}".format(
+        #     depth_metrics[0], gt_infos[0], depth_metrics[1], gt_infos[1], depth_metrics[2], gt_infos[2],
+        #     depth_metrics[3], gt_infos[3], depth_metrics[4], gt_infos[4], depth_metrics[5], gt_infos[5],
+        #     depth_metrics[6], gt_infos[6], depth_metrics[7], gt_infos[7]
+        # ))
 
     except KeyboardInterrupt:
         print('Stopping...')
