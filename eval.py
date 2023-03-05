@@ -73,7 +73,7 @@ def evaluate(net: PlaneRecNet, dataset, during_training=False, eval_nums=-1):
     dataset_indices = dataset_indices[:eval_nums]
 
     infos = []
-    # gt_infos = []
+    gt_infos = []
     ap_data = {
         'box': [APDataObject()  for _ in iou_thresholds],
         'mask': [APDataObject() for _ in iou_thresholds]
@@ -104,10 +104,10 @@ def evaluate(net: PlaneRecNet, dataset, during_training=False, eval_nums=-1):
             # pred_depth: 1 x 1 x 480 x 640
             # k_matrices 3 x 3
             # gt_masks: 10 x 480 x 640
-            # try:
-            #     gt_infos.append(pgd(pred_depth[0], gt_depth, gt_masks, k_matrices))
-            # except:
-            #     continue
+            try:
+                gt_infos.append(pgd(pred_depth[0], gt_depth, gt_masks, k_matrices))
+            except:
+                continue
             depth_error_per_frame = compute_depth_metrics(pred_depth, gt_depth, pred_masks, median_scaling=True, only_plane_areas=False)
             infos.append(depth_error_per_frame)
 
@@ -148,15 +148,15 @@ def evaluate(net: PlaneRecNet, dataset, during_training=False, eval_nums=-1):
         ))
         
         
-        # gt_infos = np.asarray(gt_infos, dtype=np.double)
-        # gt_infos = gt_infos.sum(axis=0)/gt_infos.shape[0]
-        # print()
-        # print("Depth gt plane:")
-        # print("{}: {:.5f}, {}: {:.5f}, {}: {:.5f}, {}: {:.5f}, {}: {:.5f}, {}: {:.5f}, {}: {:.5f} \n{}: {:.5f}".format(
-        #     depth_metrics[0], gt_infos[0], depth_metrics[1], gt_infos[1], depth_metrics[2], gt_infos[2],
-        #     depth_metrics[3], gt_infos[3], depth_metrics[4], gt_infos[4], depth_metrics[5], gt_infos[5],
-        #     depth_metrics[6], gt_infos[6], depth_metrics[7], gt_infos[7]
-        # ))
+        gt_infos = np.asarray(gt_infos, dtype=np.double)
+        gt_infos = gt_infos.sum(axis=0)/gt_infos.shape[0]
+        print()
+        print("Depth gt plane:")
+        print("{}: {:.5f}, {}: {:.5f}, {}: {:.5f}, {}: {:.5f}, {}: {:.5f}, {}: {:.5f}, {}: {:.5f} \n{}: {:.5f}".format(
+            depth_metrics[0], gt_infos[0], depth_metrics[1], gt_infos[1], depth_metrics[2], gt_infos[2],
+            depth_metrics[3], gt_infos[3], depth_metrics[4], gt_infos[4], depth_metrics[5], gt_infos[5],
+            depth_metrics[6], gt_infos[6], depth_metrics[7], gt_infos[7]
+        ))
 
     except KeyboardInterrupt:
         print('Stopping...')
@@ -534,13 +534,13 @@ class PGD(nn.Module):
             # estimate equation for prediction
             resample_candidate = self.random_select_points(filtered_mask.clone())
             try:
-                resample_plane_equation = self.estimate_plane_equation(pointclouds_gt[resample_candidate])
+                resample_plane_equation = self.estimate_plane_equation(pointclouds_pr[resample_candidate])
                 # self.visualise(plane_equation, points, points_pred, i)
             except:
                 continue
             
             # construct a skeleton that the depth will base on
-            in_plane_points = self.mapping(resample_plane_equation, pointclouds_gt.reshape(-1, 3))[:, 2].reshape(480, 640) * filtered_mask
+            in_plane_points = self.mapping(resample_plane_equation, pointclouds_pr.reshape(-1, 3))[:, 2].reshape(480, 640) * filtered_mask
             accumulated_mask += in_plane_points
             
             # mapping_points = pointclouds_gt[filtered_mask.clone()].reshape(-1, 3)
