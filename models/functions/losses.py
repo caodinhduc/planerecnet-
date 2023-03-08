@@ -184,7 +184,7 @@ class PlaneRecNetLoss(nn.Module):
             
             
         # Plane guide depth loss
-        loss_f = nn.MSELoss()
+        loss_f = nn.MSELoss(reduce=sum)
         pgd_loss = []
         B = len(gt_instances)
         intrinsic_matrix = torch.stack([gt_instances[img_idx]['k_matrix'] for img_idx in range(len(gt_instances))], dim=0)
