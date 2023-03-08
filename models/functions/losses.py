@@ -563,7 +563,7 @@ class PGD(nn.Module):
             
             # minimize the mean distance to prediction
             measure_pred = self.measure_distance(resample_plane_equation, pointclouds_pr[filtered_mask.bool()])
-            mean_pred = torch.mean(measure_pred)
+            mean_pred = torch.sum(measure_pred)
             loss.append(mean_pred)
         # import os
         # import cv2
