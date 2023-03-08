@@ -469,12 +469,12 @@ class PGD(nn.Module):
         # np.savetxt('pc_debug.txt', pw)
         return pw
     
-    def surface_normal_from_depth(self, depth, k_matrix, valid_mask):
+    def estimate_normal_vector(self, points):
         """_summary_
         Args:
             depth (_type_): 1 x 480 x 640
         """
-        A = self.transfer_xyz(depth, k_matrix, valid_mask)
+        A = points
         
         b = torch.ones((A.shape[0], 1)).cuda()
         AT = A.transpose(1, 0).cuda()
@@ -532,21 +532,27 @@ class PGD(nn.Module):
             measure_gt = self.measure_distance(plane_equation, pointclouds_gt.reshape(-1, 3)).reshape(480, 640) * gt_masks[i].clone() * depth_gt_valid_mask
             # self.save_mask(measure_gt.clone(), str(i) + "_distance")
             mean_gt = torch.mean(measure_gt[active_area])
-            filtered_mask = measure_gt < (1.25 * mean_gt)
+            filtered_mask = measure_gt < (1.5 * mean_gt)
             filtered_mask = filtered_mask * active_area
             # self.save_mask(filtered_mask.float(), str(i) + "_filter")
             
             # estimate equation for prediction
             resample_candidate = self.random_select_points(filtered_mask.clone())
             try:
-                resample_plane_equation = self.estimate_plane_equation(pointclouds_gt[resample_candidate])
+                resample_plane_equation = self.estimate_plane_equation(pointclouds_pr[resample_candidate])
+                # resample_plane_normal = self.estimate_normal_vector(pointclouds_gt[resample_candidate])
+                # seed_point = self.random_one_point_in_plane(resample_plane_equation, pointclouds_gt[resample_candidate])
+                # seed_point_1 = 
+                # seed_point_1 = 
                 # self.visualise(plane_equation, points, points_pred, i)
             except:
                 continue
             
+            # seed_point = self.random_one_point_in_plane(resample_plane_equation, pointclouds_gt[resample_candidate])
+            
             # construct a skeleton that the depth will base on
-            in_plane_points = self.mapping(resample_plane_equation, pointclouds_gt.reshape(-1, 3))[:, 2].reshape(480, 640) * filtered_mask
-            accumulated_mask += in_plane_points
+            # in_plane_points = self.mapping(resample_plane_equation, pointclouds_gt.reshape(-1, 3))[:, 2].reshape(480, 640) * filtered_mask
+            # accumulated_mask += in_plane_points
             
             # mapping_points = pointclouds_gt[filtered_mask.clone()].reshape(-1, 3)
             # in_plane_points = self.mapping(resample_plane_equation, mapping_points)
@@ -618,3 +624,12 @@ class PGD(nn.Module):
         fit_2 = torch.as_tensor(fit[2])[0][0]
         z = fit_0 * x + fit_1 * y + fit_2
         return torch.stack([x, y, z], dim=1)
+    def random_one_point_in_plane(self, fit, points):
+        random_idx = np.random.randint(points.shape[0], size=1)[0]
+        x = points[random_idx, 0]
+        y = points[random_idx, 1]
+        fit_0 = torch.as_tensor(fit[0])[0][0]
+        fit_1 = torch.as_tensor(fit[1])[0][0]
+        fit_2 = torch.as_tensor(fit[2])[0][0]
+        z = fit_0 * x + fit_1 * y + fit_2
+        return torch.stack([x, y, z])

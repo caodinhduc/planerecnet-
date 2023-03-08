@@ -126,17 +126,17 @@ scannet_dataset = dataset_base.copy({
 
     # # Training images and annotations
     # 'train_images': '../scannet/official/',
-    # 'train_info':   'scannet_eval.json',
-    # # 'train_info':   '../example_file_for_test.json',
+    # # 'train_info':   'scannet_eval.json',
+    # 'train_info':   '../example_file_for_test.json',
  
     # # Validation images and annotations.
     # 'valid_images': '../scannet/official/',
     # # 'valid_info':   'scannet_eval.json',
     # 'valid_info':   '../example_file_for_test.json',
 
-    # Evaluation images and annotations.
-    'eval_images': '../scannet/official/',
-    'eval_info':   'scannet_eval.json',
+    # # Evaluation images and annotations.
+    # 'eval_images': '../scannet/official/',
+    # # 'eval_info':   'scannet_eval.json',
     # 'eval_info':   '../example_file_for_test.json',
 
     
