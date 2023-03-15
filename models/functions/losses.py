@@ -545,6 +545,7 @@ class PGD(nn.Module):
                 # seed_point_1 = 
                 # seed_point_1 = 
                 # self.visualise(plane_equation, points, points_pred, i)
+                print('')
             except:
                 continue
             

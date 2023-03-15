@@ -73,7 +73,7 @@ def evaluate(net: PlaneRecNet, dataset, during_training=False, eval_nums=-1):
     dataset_indices = dataset_indices[:eval_nums]
 
     infos = []
-    # gt_infos = []
+    gt_infos = []
     ap_data = {
         'box': [APDataObject()  for _ in iou_thresholds],
         'mask': [APDataObject() for _ in iou_thresholds]
@@ -104,12 +104,12 @@ def evaluate(net: PlaneRecNet, dataset, during_training=False, eval_nums=-1):
             # pred_depth: 1 x 1 x 480 x 640
             # k_matrices 3 x 3
             # gt_masks: 10 x 480 x 640
-            # try:
-            #     gt_infos.append(pgd(pred_depth[0], gt_depth, gt_masks, k_matrices))
-            # except:
-            #     continue
-            # depth_error_per_frame = compute_depth_metrics(pred_depth, gt_depth, pred_masks, median_scaling=True, only_plane_areas=False)
-            # infos.append(depth_error_per_frame)
+            try:
+                gt_infos.append(pgd(pred_depth[0], gt_depth, gt_masks, k_matrices))
+            except:
+                continue
+            depth_error_per_frame = compute_depth_metrics(pred_depth, gt_depth, pred_masks, median_scaling=True, only_plane_areas=False)
+            infos.append(depth_error_per_frame)
 
             if pred_masks is not None:
                 pred_masks = pred_masks.float()
@@ -148,15 +148,15 @@ def evaluate(net: PlaneRecNet, dataset, during_training=False, eval_nums=-1):
         ))
         
         
-        # gt_infos = np.asarray(gt_infos, dtype=np.double)
-        # gt_infos = gt_infos.sum(axis=0)/gt_infos.shape[0]
-        # print()
-        # print("Depth gt plane:")
-        # print("{}: {:.5f}, {}: {:.5f}, {}: {:.5f}, {}: {:.5f}, {}: {:.5f}, {}: {:.5f}, {}: {:.5f} \n{}: {:.5f}".format(
-        #     depth_metrics[0], gt_infos[0], depth_metrics[1], gt_infos[1], depth_metrics[2], gt_infos[2],
-        #     depth_metrics[3], gt_infos[3], depth_metrics[4], gt_infos[4], depth_metrics[5], gt_infos[5],
-        #     depth_metrics[6], gt_infos[6], depth_metrics[7], gt_infos[7]
-        # ))
+        gt_infos = np.asarray(gt_infos, dtype=np.double)
+        gt_infos = gt_infos.sum(axis=0)/gt_infos.shape[0]
+        print()
+        print("Depth gt plane:")
+        print("{}: {:.5f}, {}: {:.5f}, {}: {:.5f}, {}: {:.5f}, {}: {:.5f}, {}: {:.5f}, {}: {:.5f} \n{}: {:.5f}".format(
+            depth_metrics[0], gt_infos[0], depth_metrics[1], gt_infos[1], depth_metrics[2], gt_infos[2],
+            depth_metrics[3], gt_infos[3], depth_metrics[4], gt_infos[4], depth_metrics[5], gt_infos[5],
+            depth_metrics[6], gt_infos[6], depth_metrics[7], gt_infos[7]
+        ))
 
     except KeyboardInterrupt:
         print('Stopping...')
@@ -524,7 +524,7 @@ class PGD(nn.Module):
                 continue
             
             active_area = gt_masks[i].clone() * depth_gt_valid_mask
-            measure_gt = self.measure_distance(plane_equation, pointclouds_gt.reshape(-1, 3)).reshape(480, 640) * gt_masks[i].clone() * depth_gt_valid_mask
+            measure_gt = self.measure_distance(plane_equation, pointclouds_pr.reshape(-1, 3)).reshape(480, 640) * gt_masks[i].clone() * depth_gt_valid_mask
             # self.save_mask(measure_gt.clone(), str(i) + "_distance")
             mean_gt = torch.mean(measure_gt[active_area])
             filtered_mask = measure_gt < (1.25 * mean_gt)
