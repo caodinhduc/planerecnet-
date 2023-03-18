@@ -201,7 +201,7 @@ class PlaneRecNetLoss(nn.Module):
 
             else:
                 plane_guide_depth_loss = torch.tensor([0.01])
-        losses['pgd'] = 3.0 * plane_guide_depth_loss
+        losses['pgd'] = 5.0 * plane_guide_depth_loss
             
         # Depth Gradient Constraint Instance Segmentation Loss
         if cfg.use_lava_loss:
