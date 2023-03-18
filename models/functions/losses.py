@@ -532,7 +532,7 @@ class PGD(nn.Module):
             measure_gt = self.measure_distance(plane_equation, pointclouds_gt.reshape(-1, 3)).reshape(480, 640) * gt_masks[i].clone() * depth_gt_valid_mask
             # self.save_mask(measure_gt.clone(), str(i) + "_distance")
             mean_gt = torch.mean(measure_gt[active_area])
-            filtered_mask = measure_gt < (1.75 * mean_gt)
+            filtered_mask = measure_gt < (1.5 * mean_gt)
             filtered_mask = filtered_mask * active_area
             # self.save_mask(filtered_mask.float(), str(i) + "_filter")
             
