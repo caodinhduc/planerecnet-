@@ -4,11 +4,11 @@ import torch.nn.functional as F
 from data.config import cfg
 import numpy as np
 
-class VNL_Loss(nn.Module):
+class Plane_propagated_depth_guider(nn.Module):
     def __init__(self, input_size,
                  delta_cos=0.867,
                  delta_z=0.0001, sample_ratio=0.3):
-        super(VNL_Loss, self).__init__()
+        super(Plane_propagated_depth_guider, self).__init__()
         self.input_size = input_size
         self.u0 = torch.tensor(input_size[1] // 2, dtype=torch.float32).cuda() # x, y focal center
         self.v0 = torch.tensor(input_size[0] // 2, dtype=torch.float32).cuda()
@@ -54,68 +54,7 @@ class VNL_Loss(nn.Module):
         np.random.shuffle(p3)
         p123 = {'p1_x': p1, 'p2_x': p2, 'p3_x': p3}
         return p123
-
-    def form_pw_groups(self, p123, pw):
-        """
-        Form 3D points groups, with 3 points in each grouup.
-        :param p123: points index
-        :param pw: 3D points
-        :return:
-        """
-        p1_x = p123['p1_x']
-        p2_x = p123['p2_x']
-        p3_x = p123['p3_x']
-        pw1 = pw[p1_x, :]
-        pw2 = pw[p2_x, :]
-        pw3 = pw[p3_x, :]
-        # [B, N, 3(x,y,z), 3(p1,p2,p3)]
-        pw_groups = torch.cat([pw1[:, :, np.newaxis], pw2[:, :, np.newaxis], pw3[:, :, np.newaxis]], 2)
-        return pw_groups
-
-    def filter_mask(self, p123, point_cloud, delta_cos=0.985, 
-                    delta_diff=0.005):
-        pw = self.form_pw_groups(p123, point_cloud)
-        pw12 = pw[:, :, 1] - pw[:, :, 0]
-        pw13 = pw[: ,:, 2] - pw[:, :, 0]
-        pw23 = pw[: ,:, 2] - pw[:, :, 1]
-
-        ###ignore linear
-        pw_diff = torch.cat([pw12[ :, :, np.newaxis], pw13[ :, :, np.newaxis], pw23[ :, :, np.newaxis]], 2)  # [n, 3, 3]
-        groups, coords, index = pw_diff.shape
-        proj_query = pw_diff.permute(0, 2, 1)  #[bn, 3(p123), 3(xyz)]
-        proj_key = pw_diff  #[bn, 3(xyz), 3(p123)]
-        q_norm = proj_query.norm(2, dim=2)
-        nm = torch.bmm(q_norm.unsqueeze(dim=2), q_norm.unsqueeze(dim=1)) #[]
-        energy = torch.bmm(proj_query, proj_key)  # transpose check [bn, 3(p123), 3(p123)]
-        norm_energy = energy / (nm + 1e-8)
-        norm_energy = norm_energy.view(groups, -1)
-        mask_cos = torch.sum((norm_energy > delta_cos) + (norm_energy < -delta_cos), 1) > 3  # igonre
-
-        ##ignore padding and invilid depth
-        mask_pad = torch.sum(pw[ :, 2, :] > self.delta_z, 1) == 3
-
-        ###ignore near
-        mask_x = torch.sum(torch.abs(pw_diff[:, 0, :]) < delta_diff, 1) > 0
-        mask_y = torch.sum(torch.abs(pw_diff[:, 1, :]) < delta_diff, 1) > 0
-        mask_z = torch.sum(torch.abs(pw_diff[:, 2, :]) < delta_diff, 1) > 0
-
-        mask_ignore = (mask_x & mask_y & mask_z) | mask_cos
-        mask_near = ~mask_ignore
-        mask = mask_pad & mask_near
-        return mask, pw
     
-    def normal_from_triplets(self, triplets, simpled_mask):
-        triplets = triplets[simpled_mask]
-        p12 = triplets[ :, :, 1] - triplets[ :, :, 0]
-        p13 = triplets[ :, :, 2] - triplets[ :, :, 0]
-        normal = torch.cross(p12, p13, dim=1)
-        norm = torch.norm(normal, 2, dim=1, keepdim=True)
-        valid_mask = norm == 0.0
-        valid_mask = valid_mask.to(torch.float32)
-        valid_mask *= 0.01
-        norm = norm + valid_mask
-        normal = normal / norm
-        return normal
         
     def estimate_plane_equation(self, points):
         """_summary_
@@ -146,6 +85,7 @@ class VNL_Loss(nn.Module):
         x, y = np.where(gt_mask == True)
         num_positives = x.shape[0]
         query_indexs = np.random.choice(num_positives, int(num_positives * random_rate), replace=True)
+        # propagated_indexs = np.random.choice(num_positives, int(num_positives * random_rate), replace=True)
         propagated_indexs = np.random.choice(num_positives, 10, replace=False)
         x_queries = x[query_indexs]
         y_queries = y[query_indexs]
@@ -158,7 +98,11 @@ class VNL_Loss(nn.Module):
         
         C, H, W = pred_depth.shape
         pred_pointcloud = self.transfer_xyz(pred_depth, k_maritix) #480*640*3
+        
         pred_depth = pred_depth[0]
+        N = gt_masks.shape[0]
+        output = pred_depth.clone()
+
         for i in range(0, N):
             # estimate the equation
             candidate = self.random_select_points(gt_masks[i].clone()) * depth_gt_valid_mask
@@ -175,9 +119,12 @@ class VNL_Loss(nn.Module):
             x_queries, y_queries, x_propagated, y_propagated = self.select_points(gt_masks[i])
             
             # indexes after calibration 
-            query_x = pred_pointcloud[x_queries, y_queries, 0]
-            query_y = pred_pointcloud[x_queries, y_queries, 1]
-            propagated_x = pred_pointcloud[x_propagated, y_propagated, 0]
-            propagated_y = pred_pointcloud[x_propagated, y_propagated, 1]
-            pred_depth[x_queries, y_queries] = torch.mean(pred_depth[x_propagated, y_propagated].reshape(1, -1) * ((a * query_x + b * query_y + d).reshape(-1, 1)/ (a * propagated_x + b * propagated_y + d)), 1)
- 
+            query_x = pred_pointcloud[x_queries, y_queries, 0].detach()
+            query_y = pred_pointcloud[x_queries, y_queries, 1].detach()
+            propagated_x = pred_pointcloud[x_propagated, y_propagated, 0].detach()
+            propagated_y = pred_pointcloud[x_propagated, y_propagated, 1].detach()
+            output[x_queries, y_queries] = torch.mean(pred_depth[x_propagated, y_propagated].reshape(1, -1) * ((a * query_x + b * query_y + d).reshape(-1, 1)/ (a * propagated_x + b * propagated_y + d)), 1)
+            # pred_depth[x_propagated, y_propagated].reshape(1, -1) * 
+            # output[0, x_queries, y_queries] = torch.mean(((a * query_x + b * query_y + d).reshape(-1, 1)/ (a * propagated_x + b * propagated_y + d)), 1)
+        # check_2 = output[x_queries, y_queries]
+        return torch.unsqueeze(output, 0)

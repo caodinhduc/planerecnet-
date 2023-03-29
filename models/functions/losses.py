@@ -7,8 +7,9 @@ import numpy as np
 from torch.autograd import Variable
 from data.config import cfg
 from models.functions.funcs import imrescale, center_of_mass
-from models.functions.vnl import VNL_Loss
 from eval import compute_depth_metrics
+
+from models.functions.pgdp import Plane_propagated_depth_guider
 
 
 class PlaneRecNetLoss(nn.Module):
@@ -51,10 +52,9 @@ class PlaneRecNetLoss(nn.Module):
         self.conf_loss = SigmoidFocalLoss(gamma=self.focal_loss_gamma, alpha=self.focal_loss_alpha, reduction="sum")
         self.point_wise_depth_loss = RMSElogLoss(reduction="mean")
         self.depth_constraint_inst_loss = LavaLoss()
-        self.vnl = VNL_Loss((480,640))
+        self.ppdg = Plane_propagated_depth_guider((480,640))
         # self.vnl = VNL_Loss((640,640))
         # self.boundary_loss = BoundaryLoss()
-        self.pgd = PGD()
         
 
     def forward(self, net, mask_preds, cate_preds, kernel_preds, depth_preds, gt_instances, gt_depths):
@@ -159,6 +159,11 @@ class PlaneRecNetLoss(nn.Module):
         # Point-wise Depth Loss
         gt_depths = Variable(gt_depths, requires_grad=False)
         depth_preds = F.interpolate(depth_preds, scale_factor=2, mode='bilinear', align_corners=False)
+        
+        # propagate depth
+        intrinsic_matrix = torch.stack([gt_instances[img_idx]['k_matrix'] for img_idx in range(len(gt_instances))], dim=0)
+        for i in range(depth_preds.shape[0]):
+            depth_preds[i] = self.ppdg(depth_preds[i], gt_instances[i]['masks'].bool(), gt_depths[i], intrinsic_matrix[i])
         valid_mask = (gt_depths > cfg.dataset.min_depth) # All ground truth >= min depth are considered as invalid/non-informative pixels
         gt_depths.clamp(max=cfg.dataset.max_depth)
         loss_depth = self.depth_loss_weight * self.point_wise_depth_loss(depth_preds, gt_depths, valid_mask)
@@ -181,27 +186,6 @@ class PlaneRecNetLoss(nn.Module):
                 loss_plane.append(loss_plane_per_frame)
             loss_plane_mean = torch.stack(loss_plane).mean()
             losses['pln'] = loss_plane_mean * self.pln_loss_weight
-            
-            
-        # Plane guide depth loss
-        loss_f = nn.MSELoss(reduce=sum)
-        pgd_loss = []
-        B = len(gt_instances)
-        intrinsic_matrix = torch.stack([gt_instances[img_idx]['k_matrix'] for img_idx in range(len(gt_instances))], dim=0)
-        for img_idx in range(0, B):
-            gt_masks = gt_instances[img_idx]['masks'].bool()
-            gt_planes = gt_instances[img_idx]['plane_paras']
-            gt_plane_normals = gt_planes[:, :3]
-            k_matrix = intrinsic_matrix[img_idx]
-            pgd_per_frame = self.pgd(depth_preds[img_idx], gt_depths[img_idx], gt_masks, gt_plane_normals, k_matrix)
-            pgd_loss += pgd_per_frame
-            if len(pgd_loss) > 0:
-                zeros = torch.zeros(len(pgd_loss), dtype=float)
-                plane_guide_depth_loss = loss_f(torch.stack(pgd_loss).reshape(-1), zeros)
-
-            else:
-                plane_guide_depth_loss = torch.tensor([0.01])
-        losses['pgd'] = 3.0 * plane_guide_depth_loss
             
         # Depth Gradient Constraint Instance Segmentation Loss
         if cfg.use_lava_loss:
@@ -431,205 +415,3 @@ class RMSElogLoss(nn.Module):
 
         return loss
     
-
-class PGD(nn.Module):
-    def __init__(self, input_size=(480, 640)):
-        super(PGD, self).__init__()
-        self.input_size = input_size
-        self.u0 = torch.tensor(input_size[1] // 2, dtype=torch.float32).cuda() # x, y focal center
-        self.v0 = torch.tensor(input_size[0] // 2, dtype=torch.float32).cuda()
-        self.init_image_coor()
-        
-    def init_image_coor(self): # take care of point cloud
-        x_row = np.arange(0, self.input_size[1])
-        x = np.tile(x_row, (self.input_size[0], 1))
-        x = x[np.newaxis, :, :]
-        x = x.astype(np.float32)
-        x = torch.from_numpy(x.copy()).cuda()
-        self.u_u0 = x - self.u0
-
-        y_col = np.arange(0, self.input_size[0])  # y_col = np.arange(0, height)
-        y = np.tile(y_col, (self.input_size[1], 1)).T
-        y = y[np.newaxis, :, :]
-        y = y.astype(np.float32)
-        y = torch.from_numpy(y.copy()).cuda()
-        self.v_v0 = y - self.v0
-        
-    def transfer_xyz(self, depth, k_matrix):
-        fx = k_matrix[0,0]
-        fy = k_matrix[1,1]
-
-        x = self.u_u0 * torch.abs(depth) / fx
-        y = self.v_v0 * torch.abs(depth) / fy
-        z = depth
-        pw = torch.cat([x, y, z], 0).permute(1, 2, 0)
-        
-        # log for debugging
-        # pw = pw.detach().cpu().numpy().reshape(-1, 3)
-        # np.savetxt('pc_debug.txt', pw)
-        return pw
-    
-    def estimate_normal_vector(self, points):
-        """_summary_
-        Args:
-            depth (_type_): 1 x 480 x 640
-        """
-        A = points
-        
-        b = torch.ones((A.shape[0], 1)).cuda()
-        AT = A.transpose(1, 0).cuda()
-        ATA = torch.mm(AT, A).cuda()
-        try:
-            invert_ATA = torch.linalg.pinv(ATA)
-        except:
-            return False
-        numerator = torch.mm(torch.mm(invert_ATA, AT), b)
-        numerator = numerator.reshape(3)
-        denominator = torch.norm(numerator).repeat(3)
-        eps_denominator = 1e-6*torch.rand(3, device=denominator.device, dtype=denominator.dtype)
-        return numerator/(denominator + eps_denominator)
-
-    def forward(self, depth_pred, gt_depth, gt_masks, gt_plane_normals, k_matrix):
-        """_summary_
-        Args:
-            depth_preds (_type_): 1 x 480 x 640
-            gt_masks (_type_): num_plane x 480 x 640
-            gt_plane_normals (_type_): num_plane x 3
-            gt_depth (_type_): 1 x 480 x 640
-            k_matrix (_type_): 3 x 3
-        Returns:
-            _type_: _description_
-        """
-        depth_pr_valid_mask = depth_pred[0] > cfg.dataset.min_depth
-        depth_gt_valid_mask = gt_depth[0] > cfg.dataset.min_depth
-        
-        pointclouds_gt = self.transfer_xyz(gt_depth, k_matrix)
-        pointclouds_pr = self.transfer_xyz(depth_pred, k_matrix)
-
-        loss = []
-        # loss_gt = []
-        if (gt_masks.shape[0]) == 0:
-            return loss
-   
-        visualize_points = []
-        accumulated_mask = torch.zeros(480, 640)
-        
-        for i in range(gt_masks.shape[0]):
-            # skip if the mask is too small:
-            if torch.sum(gt_masks[i].float()) < 30000:
-                continue
-            candidate = self.random_select_points(gt_masks[i].clone()) * depth_gt_valid_mask
-            # self.save_mask(gt_masks[i].clone(), i)
-            candidate_points = pointclouds_gt[candidate]
-            # points_pred = gt_3d_points_pred[candidate]
-            try:
-                plane_equation = self.estimate_plane_equation(candidate_points)
-                # self.visualise(plane_equation, points, points_pred, i)
-            except:
-                continue
-            
-            active_area = gt_masks[i].clone() * depth_gt_valid_mask
-            measure_gt = self.measure_distance(plane_equation, pointclouds_gt.reshape(-1, 3)).reshape(480, 640) * gt_masks[i].clone() * depth_gt_valid_mask
-            # self.save_mask(measure_gt.clone(), str(i) + "_distance")
-            mean_gt = torch.mean(measure_gt[active_area])
-            filtered_mask = measure_gt < (1.25 * mean_gt)
-            filtered_mask = filtered_mask * active_area
-            # self.save_mask(filtered_mask.float(), str(i) + "_filter")
-            
-            # estimate equation for prediction
-            resample_candidate = self.random_select_points(filtered_mask.clone())
-            try:
-                resample_plane_equation = self.estimate_plane_equation(pointclouds_pr[resample_candidate])
-                # resample_plane_normal = self.estimate_normal_vector(pointclouds_gt[resample_candidate])
-                # seed_point = self.random_one_point_in_plane(resample_plane_equation, pointclouds_gt[resample_candidate])
-                # seed_point_1 = 
-                # seed_point_1 = 
-                # self.visualise(plane_equation, points, points_pred, i)
-            except:
-                continue
-            
-            # seed_point = self.random_one_point_in_plane(resample_plane_equation, pointclouds_gt[resample_candidate])
-            
-            # construct a skeleton that the depth will base on
-            # in_plane_points = self.mapping(resample_plane_equation, pointclouds_gt.reshape(-1, 3))[:, 2].reshape(480, 640) * filtered_mask
-            # accumulated_mask += in_plane_points
-            
-            # mapping_points = pointclouds_gt[filtered_mask.clone()].reshape(-1, 3)
-            # in_plane_points = self.mapping(resample_plane_equation, mapping_points)
-            # # log for debugging
-            # in_plane_points = in_plane_points.detach().cpu().numpy().reshape(-1, 3)
-            # visualize_points += in_plane_points.tolist()
-            
-            
-            # minimize the mean distance to prediction
-            measure_pred = self.measure_distance(resample_plane_equation, pointclouds_pr[filtered_mask.bool()])
-            mean_pred = torch.mean(measure_pred)
-            loss.append(mean_pred)
-        # import os
-        # import cv2
-        # current_tensor = accumulated_mask.detach().cpu().numpy()
-        # current_tensor = ((current_tensor - current_tensor.min()) / (current_tensor.max() - current_tensor.min()) * 255).astype(np.uint8)
-        # tensor_color = cv2.applyColorMap(current_tensor, cv2.COLORMAP_VIRIDIS)
-        # tensor_color_path = os.path.join('accumulated_pr.png')
-        # cv2.imwrite(tensor_color_path, tensor_color)
-        # np.savetxt('in_plane_points.txt', np.array(visualize_points))
-        # result = compute_depth_metrics(accumulated_mask, gt_depth, accumulated_mask>0.0)
-        return loss
-    
-        
-    def estimate_plane_equation(self, points):
-        """_summary_
-        Args:
-            points (_type_): num_sample x 3
-        Returns:
-            _type_: _description_
-        """
-        # print(points.shape)
-        points = points.detach().cpu().numpy()
-        num_sample = points.shape[0]
-        A = np.matrix(np.column_stack((points[:, 0], points[:, 1], np.ones((num_sample, 1)))))
-        b = np.matrix(points[:, 2].reshape(num_sample, 1))
-        fit = (A.T * A).I * A.T * b
-        return fit
-    
-    def random_select_points(self, gt_mask):
-        random_mask = torch.rand(480, 640) > 0.95
-        return gt_mask * random_mask
-    
-    def measure_distance(self, fit, point):
-        # 88283 x 3
-        point = torch.column_stack((point, torch.ones(point.shape[0], 1)))
-        A = np.asarray(fit[0]).reshape(-1)[0]
-        B = np.asarray(fit[1]).reshape(-1)[0]
-        C = torch.tensor(-1.0)
-        D = np.asarray(fit[2]).reshape(-1)[0]
-        t = torch.tensor([A, B, C, D])
-        num = torch.abs(torch.sum(t * point, dim=1))
-        den = torch.sqrt(torch.sum(torch.square(t)))
-        return num/(den + 1e-6)
-    
-    def save_mask(self, mask, index):
-        current_tensor = mask.detach().cpu().numpy().astype(float)
-        current_tensor = ((current_tensor - current_tensor.min()) / (current_tensor.max() - current_tensor.min()) * 255).astype(np.uint8)
-        # current_tensor = cv2.Canny(current_tensor,50,100, 1)
-        tensor_color = cv2.applyColorMap(current_tensor, cv2.COLORMAP_VIRIDIS)
-        tensor_color_path = os.path.join('image_logs/gt_mask', '{}.png'.format(index))
-        cv2.imwrite(tensor_color_path, tensor_color)
-    
-    def mapping(self, fit, points):
-        x = points[:, 0]
-        y = points[:, 1]
-        fit_0 = torch.as_tensor(fit[0])[0][0]
-        fit_1 = torch.as_tensor(fit[1])[0][0]
-        fit_2 = torch.as_tensor(fit[2])[0][0]
-        z = fit_0 * x + fit_1 * y + fit_2
-        return torch.stack([x, y, z], dim=1)
-    def random_one_point_in_plane(self, fit, points):
-        random_idx = np.random.randint(points.shape[0], size=1)[0]
-        x = points[random_idx, 0]
-        y = points[random_idx, 1]
-        fit_0 = torch.as_tensor(fit[0])[0][0]
-        fit_1 = torch.as_tensor(fit[1])[0][0]
-        fit_2 = torch.as_tensor(fit[2])[0][0]
-        z = fit_0 * x + fit_1 * y + fit_2
-        return torch.stack([x, y, z])
