@@ -193,7 +193,7 @@ def tensorborad_visual_log(net: PlaneRecNet, dataset, writer: SummaryWriter, ite
         print('Stopping...')
 
 
-def compute_depth_metrics(pred_depth, gt_depth, pred_masks, median_scaling=True, only_plane_areas=True):
+def compute_depth_metrics(pred_depth, gt_depth, pred_masks, median_scaling=False, only_plane_areas=False):
     """
     Computation of error metrics between predicted and ground truth depths.
     Prediction and ground turth need to be converted to the same unit e.g. [meter].

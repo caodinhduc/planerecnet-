@@ -86,7 +86,7 @@ class Plane_propagated_depth_guider(nn.Module):
         num_positives = x.shape[0]
         query_indexs = np.random.choice(num_positives, int(num_positives * random_rate), replace=True)
         # propagated_indexs = np.random.choice(num_positives, int(num_positives * random_rate), replace=True)
-        propagated_indexs = np.random.choice(num_positives, 10, replace=False)
+        propagated_indexs = np.random.choice(num_positives, num_neighbors, replace=False)
         x_queries = x[query_indexs]
         y_queries = y[query_indexs]
         x_propagated = x[propagated_indexs]
@@ -126,5 +126,7 @@ class Plane_propagated_depth_guider(nn.Module):
             output[x_queries, y_queries] = torch.mean(pred_depth[x_propagated, y_propagated].reshape(1, -1) * ((a * query_x + b * query_y + d).reshape(-1, 1)/ (a * propagated_x + b * propagated_y + d)), 1)
             # pred_depth[x_propagated, y_propagated].reshape(1, -1) * 
             # output[0, x_queries, y_queries] = torch.mean(((a * query_x + b * query_y + d).reshape(-1, 1)/ (a * propagated_x + b * propagated_y + d)), 1)
+            
+            #
         # check_2 = output[x_queries, y_queries]
         return torch.unsqueeze(output, 0)
