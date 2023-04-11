@@ -6,6 +6,7 @@ from torch.autograd import Variable
 from data.config import cfg
 from models.functions.funcs import imrescale, center_of_mass
 from models.functions.vnl import VNL_Loss
+from models.functions.pgdp import Plane_propagated_depth_guider
 
 
 class PlaneRecNetLoss(nn.Module):
@@ -51,6 +52,7 @@ class PlaneRecNetLoss(nn.Module):
         self.vnl = VNL_Loss((480,640))
         # self.vnl = VNL_Loss((640,640))
         # self.boundary_loss = BoundaryLoss()
+        self.ppdg = Plane_propagated_depth_guider((480,640))
         
 
     def forward(self, net, mask_preds, cate_preds, kernel_preds, depth_preds, gt_instances, gt_depths):
@@ -155,6 +157,12 @@ class PlaneRecNetLoss(nn.Module):
         # Point-wise Depth Loss
         gt_depths = Variable(gt_depths, requires_grad=False)
         depth_preds = F.interpolate(depth_preds, scale_factor=2, mode='bilinear', align_corners=False)
+        
+        # propagate depth
+        intrinsic_matrix = torch.stack([gt_instances[img_idx]['k_matrix'] for img_idx in range(len(gt_instances))], dim=0)
+        for i in range(depth_preds.shape[0]):
+            depth_preds[i] = self.ppdg(depth_preds[i], gt_instances[i]['masks'].bool(), gt_depths[i], intrinsic_matrix[i])
+        
         valid_mask = (gt_depths > cfg.dataset.min_depth) # All ground truth >= min depth are considered as invalid/non-informative pixels
         gt_depths.clamp(max=cfg.dataset.max_depth)
         loss_depth = self.depth_loss_weight * self.point_wise_depth_loss(depth_preds, gt_depths, valid_mask)

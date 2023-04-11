@@ -132,7 +132,7 @@ scannet_dataset = dataset_base.copy({
     # 'valid_images': '../scannet/official/',
     # 'valid_info':   'scannet_eval.json',
 
-    # Evaluation images and annotations.
+    # # Evaluation images and annotations.
     # 'eval_images': '../scannet/official/',
     # 'eval_info':   'scannet_eval.json',
 
