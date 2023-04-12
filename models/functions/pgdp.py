@@ -88,18 +88,18 @@ class Plane_propagated_depth_guider(nn.Module):
         den = torch.sqrt(torch.sum(torch.square(t)))
         return (num/(den + 1e-6)).reshape(480, 640)
     
-    def select_points(self, gt_mask, random_rate=0.3, num_neighbors=1):
-        gt_mask = gt_mask.detach().cpu().numpy()
-        x, y = np.where(gt_mask == True)
-        num_positives = x.shape[0]
-        query_indexs = np.random.choice(num_positives, int(num_positives * random_rate), replace=True)
-        # propagated_indexs = np.random.choice(num_positives, int(num_positives * random_rate), replace=True)
-        propagated_indexs = np.random.choice(num_positives, int(num_positives * random_rate), replace=True)
-        x_queries = x[query_indexs]
-        y_queries = y[query_indexs]
-        x_propagated = x[propagated_indexs]
-        y_propagated = y[propagated_indexs]
-        return x_queries, y_queries, x_propagated, y_propagated
+    def select_points(self, gt_mask, random_rate=0.1, num_neighbors=4):
+            gt_mask = gt_mask.detach().cpu().numpy()
+            x, y = np.where(gt_mask == True)
+            num_positives = x.shape[0]
+            query_indexs = np.random.choice(num_positives, int(num_positives * random_rate), replace=True)
+            # propagated_indexs = np.random.choice(num_positives, int(num_positives * random_rate), replace=True)
+            propagated_indexs = np.random.choice(num_positives, 480 * 640 * num_neighbors, replace=True)
+            x_queries = x[query_indexs]
+            y_queries = y[query_indexs]
+            x_propagated = x[propagated_indexs]
+            y_propagated = y[propagated_indexs]
+            return x_queries, y_queries, x_propagated.reshape(480, 640, num_neighbors), y_propagated.reshape(480, 640, num_neighbors)
     
     def forward(self, pred_depth, gt_masks, gt_depth, k_maritix):
         depth_gt_valid_mask = gt_depth[0] > cfg.dataset.min_depth
@@ -126,8 +126,10 @@ class Plane_propagated_depth_guider(nn.Module):
             # original index 
             x_queries, y_queries, x_propagated, y_propagated = self.select_points(gt_masks[i])
             distance2plane = self.measure_distance(a, b, d, pred_pointcloud).detach()
-            # tem = distance2plane[x_queries.tolist(), y_queries.tolist()]/distance2plane[x_propagated.tolist(), y_propagated.tolist()]
-            output[x_queries, y_queries] = pred_depth[x_propagated, y_propagated] * (distance2plane[x_queries, y_queries] / distance2plane[x_propagated, y_propagated]).to(torch.float32)
+            deno = distance2plane[x_propagated[x_queries, y_queries], y_propagated[x_queries, y_queries]]
+            nume = distance2plane[x_queries, y_queries].reshape(-1, 1)
+            frac = (nume/deno).to(torch.float32)
+            output[x_queries, y_queries] = torch.mean(pred_depth[x_propagated[x_queries, y_queries], y_propagated[x_queries, y_queries]] * frac, dim=1)
             # print('ok')
             # pred_depth[x_propagated, y_propagated].reshape(1, -1) * 
             # output[0, x_queries, y_queries] = torch.mean(((a * query_x + b * query_y + d).reshape(-1, 1)/ (a * propagated_x + b * propagated_y + d)), 1)
