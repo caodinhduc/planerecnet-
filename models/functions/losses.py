@@ -6,7 +6,6 @@ from torch.autograd import Variable
 from data.config import cfg
 from models.functions.funcs import imrescale, center_of_mass
 from models.functions.vnl import VNL_Loss
-from models.functions.pgdp import Plane_propagated_depth_guider
 
 
 class PlaneRecNetLoss(nn.Module):
@@ -51,8 +50,7 @@ class PlaneRecNetLoss(nn.Module):
         self.depth_constraint_inst_loss = LavaLoss()
         self.vnl = VNL_Loss((480,640))
         # self.vnl = VNL_Loss((640,640))
-        # self.boundary_loss = BoundaryLoss()
-        self.ppdg = Plane_propagated_depth_guider((480,640))
+        self.boundary_loss = BoundaryLoss()
         
 
     def forward(self, net, mask_preds, cate_preds, kernel_preds, depth_preds, gt_instances, gt_depths):
@@ -124,14 +122,14 @@ class PlaneRecNetLoss(nn.Module):
 
 
         # Boundary loss
-        # loss_boundary = []
-        # for input, target in zip(ins_pred_list, ins_labels):
-        #     if input is None:
-        #         continue
-        #     input = torch.sigmoid(input)
-        #     loss_boundary.append(self.boundary_loss(input, target))
-        # loss_bdr_mean = torch.stack(loss_boundary).mean()
-        # losses['bdr'] = loss_bdr_mean
+        loss_boundary = []
+        for input, target in zip(ins_pred_list, ins_labels):
+            if input is None:
+                continue
+            input = torch.sigmoid(input)
+            loss_boundary.append(self.boundary_loss(input, target))
+        loss_bdr_mean = torch.stack(loss_boundary).mean()
+        losses['bdr'] = loss_bdr_mean
 
 
         # Classification Loss
@@ -157,11 +155,6 @@ class PlaneRecNetLoss(nn.Module):
         # Point-wise Depth Loss
         gt_depths = Variable(gt_depths, requires_grad=False)
         depth_preds = F.interpolate(depth_preds, scale_factor=2, mode='bilinear', align_corners=False)
-        
-        # propagate depth
-        intrinsic_matrix = torch.stack([gt_instances[img_idx]['k_matrix'] for img_idx in range(len(gt_instances))], dim=0)
-        for i in range(depth_preds.shape[0]):
-            depth_preds[i] = self.ppdg(depth_preds[i], gt_instances[i]['masks'].bool(), gt_depths[i], intrinsic_matrix[i])
         
         valid_mask = (gt_depths > cfg.dataset.min_depth) # All ground truth >= min depth are considered as invalid/non-informative pixels
         gt_depths.clamp(max=cfg.dataset.max_depth)
@@ -205,6 +198,17 @@ class PlaneRecNetLoss(nn.Module):
             batched_gt_scale_invariant_gradients = (compute_gradient_map(gt_depths, valid_mask) / torch.pow(gt_depths.clamp(min=self.depth_resolution), 2))
             batched_gt_scale_invariant_gradients = batched_gt_scale_invariant_gradients.clamp(max=1e-2)
             batched_gt_scale_invariant_gradients[batched_gt_scale_invariant_gradients<1e-4] = 0
+            
+            import os
+            import cv2
+            import numpy as np
+            current_tensor = batched_gt_scale_invariant_gradients[0, 0, :, :].detach().cpu().numpy()
+            current_tensor = ((current_tensor - current_tensor.min()) / (current_tensor.max() - current_tensor.min()) * 255).astype(np.uint8)
+            # current_tensor = cv2.Canny(current_tensor,50,100, 1)
+            tensor_color = cv2.applyColorMap(current_tensor, cv2.COLORMAP_VIRIDIS)
+            tensor_color_path = os.path.join('image_logs/gradient_map.png')
+            cv2.imwrite(tensor_color_path, tensor_color)
+        
 
             for idx, ins_pred_per_img in enumerate(ins_pred_batched_list):
                 ins_mask_num = ins_pred_per_img.shape[0]
@@ -413,11 +417,11 @@ class BoundaryLoss(nn.Module):
         # import cv2
         # import numpy as np
         # for i in range(input_boundary.shape[0]):
-        #     current_tensor = input_boundary[i, :, :].detach().cpu().numpy()
+        #     current_tensor = target_boundary[i, :, :].detach().cpu().numpy()
         #     current_tensor = ((current_tensor - current_tensor.min()) / (current_tensor.max() - current_tensor.min()) * 255).astype(np.uint8)
         #     # current_tensor = cv2.Canny(current_tensor,50,100, 1)
-        #     tensor_color = cv2.applyColorMap(current_tensor, cv2.COLORMAP_VIRIDIS)
-        #     tensor_color_path = os.path.join('image_logs/PR', '{}.png'.format(i))
+        #     tensor_color = cv2.applyColorMap(current_tensor, cv2.COLORMAP_MAGMA)
+        #     tensor_color_path = os.path.join('image_logs/predicted_mask', '{}.png'.format(i))
         #     cv2.imwrite(tensor_color_path, tensor_color)
         
         # for i in range(target_boundary.shape[0]):

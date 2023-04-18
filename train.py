@@ -117,7 +117,7 @@ if args.batch_size // torch.cuda.device_count() < 6:
         print('Per-GPU batch size is less than the recommended limit for batch norm. Disabling batch norm.')
     cfg.freeze_bn = True
 
-loss_types = ['ins', 'lav', 'cat', 'dpt', 'pln', 'pgd']
+loss_types = ['ins', 'lav', 'cat', 'dpt', 'pln', 'bdr']
 
 if torch.cuda.is_available():
     torch.set_default_tensor_type('torch.cuda.FloatTensor')
