@@ -104,6 +104,19 @@ class PlaneRecNetLoss(nn.Module):
                 b_mask_pred = torch.cat(b_mask_pred, 0)
             ins_pred_list.append(b_mask_pred)
         
+        # import os
+        # import cv2
+        # temp = ins_pred_list[2]
+        # temp = torch.sigmoid(temp)
+        # for i in range(temp.shape[0]):
+        #     current_tensor = temp[i].detach().cpu().numpy()
+        #     current_tensor = ((current_tensor - current_tensor.min()) / (current_tensor.max() - current_tensor.min()) * 255).astype(np.uint8)
+        #     tensor_color = cv2.applyColorMap(current_tensor, cv2.COLORMAP_VIRIDIS)
+        #     tensor_color_path = os.path.join('image_logs/{}.png'.format(i))
+        #     cv2.imwrite(tensor_color_path, tensor_color)
+
+        pred_masks = torch.stack([ins_pred_list[0],ins_pred_list[1], ins_pred_list[2], ins_pred_list[3]], dim=1)
+        
         ins_ind_labels = [
             torch.cat([ins_ind_labels_level_img.flatten()
                        for ins_ind_labels_level_img in ins_ind_labels_level])
