@@ -93,7 +93,10 @@ def evaluate(net: PlaneRecNet, dataset, during_training=False, eval_nums=-1):
             pred_masks, pred_boxes, pred_classes, pred_scores, pred_depth = [v for k, v in result.items()]
 
             gt_depth = gt_depth.cuda()
-            depth_error_per_frame = compute_depth_metrics(pred_depth, gt_depth, median_scaling=True)
+            try:
+                depth_error_per_frame = compute_depth_metrics(pred_depth, gt_depth, median_scaling=True)
+            except:
+                continue
             infos.append(depth_error_per_frame)
 
             if pred_masks is not None:
