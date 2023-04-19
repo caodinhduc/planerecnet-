@@ -196,6 +196,16 @@ class PlaneRecNetLoss(nn.Module):
             batched_gt_scale_invariant_gradients = (compute_gradient_map(gt_depths, valid_mask) / torch.pow(gt_depths.clamp(min=self.depth_resolution), 2))
             batched_gt_scale_invariant_gradients = batched_gt_scale_invariant_gradients.clamp(max=1e-2)
             batched_gt_scale_invariant_gradients[batched_gt_scale_invariant_gradients<1e-4] = 0
+            
+            # import os
+            # import cv2
+            # import numpy as np
+            # current_tensor = batched_gt_scale_invariant_gradients[0,0, :, :].detach().cpu().numpy()
+            # current_tensor = ((current_tensor - current_tensor.min()) / (current_tensor.max() - current_tensor.min()) * 255).astype(np.uint8)
+            # # current_tensor = cv2.Canny(current_tensor,50,100, 1)
+            # tensor_color = cv2.applyColorMap(current_tensor, cv2.COLORMAP_VIRIDIS)
+            # tensor_color_path = os.path.join('gradient.png')
+            # cv2.imwrite(tensor_color_path, tensor_color)
 
             for idx, ins_pred_per_img in enumerate(ins_pred_batched_list):
                 ins_mask_num = ins_pred_per_img.shape[0]
@@ -335,6 +345,7 @@ def compute_gradient_map(depth_map, valid_mask=None):
     gx = F.conv2d(depth_map_padded, (1.0 / 8.0) * sobel_x, padding=0)
     gy = F.conv2d(depth_map_padded, (1.0 / 8.0) * sobel_y, padding=0)
     gradients = torch.pow(gx, 2) + torch.pow(gy, 2)
+    # gradients = abs(gx) + abs(gy)
 
     if valid_mask is not None:
         gradients = gradients * valid_mask
@@ -413,11 +424,12 @@ class BoundaryLoss(nn.Module):
         self.laplacian_kernel[0,0,w,w] = (2*w+1)*(2*w+1)-1
         self.laplacian_kernel.cuda()
         self.loss = nn.MSELoss().cuda()
+        self.loss1 = nn.MSELoss().cuda()
         
     def forward(self, input, target):
         target = target.float()
-        target_boundary = F.conv2d(target.unsqueeze(1), self.laplacian_kernel, padding=0).squeeze(1)
-        input_boundary = F.conv2d(input.unsqueeze(1), self.laplacian_kernel, padding=0).squeeze(1)
+        target_boundary = F.conv2d(target.unsqueeze(1), self.laplacian_kernel, padding=1).squeeze(1)
+        input_boundary = F.conv2d(input.unsqueeze(1), self.laplacian_kernel, padding=1).squeeze(1)
         
         # input_boundary_2 = F.interpolate(input_boundary.unsqueeze(1), scale_factor=0.5, mode='bilinear', align_corners=False).squeeze(1)
         # target_boundary_2 = F.interpolate(target_boundary.unsqueeze(1), scale_factor=0.5, mode='bilinear', align_corners=False).squeeze(1)
@@ -478,6 +490,5 @@ class BoundaryLoss(nn.Module):
         pos_index = (input >= 0.2)
         input = input[pos_index]
         target = target[pos_index]
-
         loss = self.loss(input, target)
         return loss
