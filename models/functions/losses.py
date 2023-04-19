@@ -424,15 +424,15 @@ class BoundaryLoss(nn.Module):
         self.laplacian_kernel[0,0,w,w] = (2*w+1)*(2*w+1)-1
         self.laplacian_kernel.cuda()
         self.loss = nn.MSELoss().cuda()
-        self.loss1 = nn.MSELoss().cuda()
+        self.loss2 = nn.MSELoss().cuda()
         
     def forward(self, input, target):
         target = target.float()
         target_boundary = F.conv2d(target.unsqueeze(1), self.laplacian_kernel, padding=1).squeeze(1)
         input_boundary = F.conv2d(input.unsqueeze(1), self.laplacian_kernel, padding=1).squeeze(1)
         
-        # input_boundary_2 = F.interpolate(input_boundary.unsqueeze(1), scale_factor=0.5, mode='bilinear', align_corners=False).squeeze(1)
-        # target_boundary_2 = F.interpolate(target_boundary.unsqueeze(1), scale_factor=0.5, mode='bilinear', align_corners=False).squeeze(1)
+        input_boundary_2 = F.interpolate(input_boundary.unsqueeze(1), (40, 40), mode='bilinear', align_corners=False).squeeze(1)
+        target_boundary_2 = F.interpolate(target_boundary.unsqueeze(1), (40, 40), mode='bilinear', align_corners=False).squeeze(1)
         
         # ------------------------------------------------------------------------------------------------------------
         # import os
@@ -475,20 +475,23 @@ class BoundaryLoss(nn.Module):
         #------------------------------------------------------------------------------------------------------------
         # computer for downscale 2
         
-        # input2 = input_boundary_2.contiguous().view(input.size()[0], -1)
-        # target2 = target_boundary_2.contiguous().view(target.size()[0], -1).float()
-        # target2 = torch.abs(target2)
-        # input2 = torch.abs(input2)
-        # pos_index2 = (input2 >= 0.1)
-        # input2 = input2[pos_index2]
-        # target2 = target2[pos_index2]
+        input2 = input_boundary_2.contiguous().view(input.size()[0], -1)
+        target2 = target_boundary_2.contiguous().view(target.size()[0], -1).float()
+        target2 = torch.abs(target2)
+        input2 = torch.abs(input2)
+        pos_index2 = (input2 >= 0.2)
+        # sum2 = torch.sum(pos_index2)
+        input2 = input2[pos_index2]
+        target2 = target2[pos_index2]
+        loss2 = self.loss2(input2, target2)
         
         input = input_boundary.contiguous().view(input.size()[0], -1)
         target = target_boundary.contiguous().view(target.size()[0], -1).float()
         target = torch.abs(target)
         input = torch.abs(input)
         pos_index = (input >= 0.2)
+        # sum = torch.sum(pos_index)
         input = input[pos_index]
         target = target[pos_index]
         loss = self.loss(input, target)
-        return loss
+        return loss + 2.0*loss2
