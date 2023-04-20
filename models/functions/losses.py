@@ -494,4 +494,4 @@ class BoundaryLoss(nn.Module):
         input = input[pos_index]
         target = target[pos_index]
         loss = self.loss(input, target)
-        return loss + 2.0*loss2
+        return loss + loss2
