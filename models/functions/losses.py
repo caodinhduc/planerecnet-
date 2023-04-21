@@ -50,7 +50,6 @@ class PlaneRecNetLoss(nn.Module):
         self.depth_constraint_inst_loss = LavaLoss()
         # self.vnl = VNL_Loss((480,640))
         self.vnl = VNL_Loss((640,640))
-        self.boundary_loss = BoundaryLoss()
         
 
     def forward(self, net, mask_preds, cate_preds, kernel_preds, depth_preds, gt_instances, gt_depths):
@@ -119,17 +118,6 @@ class PlaneRecNetLoss(nn.Module):
         loss_ins_mean = torch.cat(loss_ins).mean()
         loss_ins = loss_ins_mean * self.ins_loss_weight
         losses['ins'] = loss_ins
-
-
-        # Boundary loss
-        loss_boundary = []
-        for input, target in zip(ins_pred_list, ins_labels):
-            if input is None:
-                continue
-            input = torch.sigmoid(input)
-            loss_boundary.append(self.boundary_loss(input, target))
-        loss_bdr_mean = torch.stack(loss_boundary).mean()
-        losses['bdr'] = loss_bdr_mean
 
         # Classification Loss
         cate_labels = [
@@ -413,49 +401,4 @@ class RMSElogLoss(nn.Module):
         elif self.reduction == "sum":
             loss = batched_loss.sum()
 
-        return loss
-
-
-class BoundaryLoss(nn.Module):
-    def __init__(self, coarse_size=None):
-        super(BoundaryLoss, self).__init__()
-        w = 1
-        self.laplacian_kernel = torch.zeros((2*w+1, 2*w+1), dtype=torch.float32).reshape(1,1,2*w+1,2*w+1).requires_grad_(False) - 1
-        self.laplacian_kernel[0,0,w,w] = (2*w+1)*(2*w+1)-1
-        self.laplacian_kernel.cuda()
-        self.coarse_size = coarse_size
-        self.loss = nn.MSELoss().cuda()
-        
-    def forward(self, input, target):
-        target = target.float()
-        
-        if self.coarse_size:
-            input = F.interpolate(input.unsqueeze(1), self.coarse_size, mode='bilinear', align_corners=False).squeeze(1)
-            target = F.interpolate(target.unsqueeze(1), self.coarse_size, mode='bilinear', align_corners=False).squeeze(1)
-        
-        target_boundary = F.conv2d(target.unsqueeze(1), self.laplacian_kernel, padding=1).squeeze(1)
-        input_boundary = F.conv2d(input.unsqueeze(1), self.laplacian_kernel, padding=1).squeeze(1)
-        
-        
-        # ------------------------------------------------------------------------------------------------------------
-        # import os
-        # import cv2
-        # import numpy as np
-            
-        # for i in range(target_80.shape[0]):
-        #     current_tensor = target_80[i, :, :].detach().cpu().numpy()
-        #     current_tensor = abs(current_tensor)
-        #     current_tensor = ((current_tensor - current_tensor.min()) / (current_tensor.max() - current_tensor.min()) * 255).astype(np.uint8)
-        #     tensor_color = cv2.applyColorMap(current_tensor, cv2.COLORMAP_VIRIDIS)
-        #     tensor_color_path = os.path.join('image_logs/GT40', '{}.png'.format(i))
-        #     cv2.imwrite(tensor_color_path, tensor_color)
-        
-        input = input_boundary.contiguous().view(input.size()[0], -1)
-        target = target_boundary.contiguous().view(target.size()[0], -1)
-        target = torch.abs(target)
-        input = torch.abs(input)
-        # pos_index = (input >= 0.2)
-        # input = input[pos_index]
-        # target = target[pos_index]
-        loss = self.loss(input, target)
         return loss
