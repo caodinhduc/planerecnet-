@@ -51,6 +51,7 @@ class PlaneRecNetLoss(nn.Module):
         # self.vnl = VNL_Loss((480,640))
         self.vnl = VNL_Loss((640,640))
         self.boundary_loss = BoundaryLoss()
+        self.boundary_loss_80 = BoundaryLoss(coarse_size=(80, 80))
         
 
     def forward(self, net, mask_preds, cate_preds, kernel_preds, depth_preds, gt_instances, gt_depths):
@@ -123,13 +124,15 @@ class PlaneRecNetLoss(nn.Module):
 
         # Boundary loss
         loss_boundary = []
+        loss_boundary_80 = []
         for input, target in zip(ins_pred_list, ins_labels):
             if input is None:
                 continue
             input = torch.sigmoid(input)
             loss_boundary.append(self.boundary_loss(input, target))
-        loss_bdr_mean = torch.stack(loss_boundary).mean()
-        losses['bdr'] = loss_bdr_mean
+            loss_boundary_80.append(self.boundary_loss_80(input, target))
+        losses['bdr']  = torch.stack(loss_boundary).mean()
+        losses['bdr_80'] = torch.stack(loss_boundary_80).mean()
 
         # Classification Loss
         cate_labels = [
@@ -417,37 +420,30 @@ class RMSElogLoss(nn.Module):
 
 
 class BoundaryLoss(nn.Module):
-    def __init__(self):
+    def __init__(self, coarse_size=None):
         super(BoundaryLoss, self).__init__()
         w = 1
         self.laplacian_kernel = torch.zeros((2*w+1, 2*w+1), dtype=torch.float32).reshape(1,1,2*w+1,2*w+1).requires_grad_(False) - 1
         self.laplacian_kernel[0,0,w,w] = (2*w+1)*(2*w+1)-1
         self.laplacian_kernel.cuda()
+        self.coarse_size = coarse_size
         self.loss = nn.MSELoss().cuda()
-        self.loss2 = nn.MSELoss().cuda()
         
     def forward(self, input, target):
         target = target.float()
+        
+        if self.coarse_size:
+            input = F.interpolate(input.unsqueeze(1), self.coarse_size, mode='bilinear', align_corners=False).squeeze(1)
+            target = F.interpolate(target.unsqueeze(1), self.coarse_size, mode='bilinear', align_corners=False).squeeze(1)
+        
         target_boundary = F.conv2d(target.unsqueeze(1), self.laplacian_kernel, padding=1).squeeze(1)
         input_boundary = F.conv2d(input.unsqueeze(1), self.laplacian_kernel, padding=1).squeeze(1)
         
-        input_80 = F.interpolate(input.unsqueeze(1), (80, 80), mode='bilinear', align_corners=False).squeeze(1)
-        target_80 = F.interpolate(target.unsqueeze(1), (80, 80), mode='bilinear', align_corners=False).squeeze(1)
-        
-        input_boundary_2 = F.conv2d(input_80.unsqueeze(1), self.laplacian_kernel, padding=1).squeeze(1)
-        target_boundary_2 = F.conv2d(target_80.unsqueeze(1), self.laplacian_kernel, padding=1).squeeze(1)
         
         # ------------------------------------------------------------------------------------------------------------
         # import os
         # import cv2
         # import numpy as np
-        # for i in range(target_boundary.shape[0]):
-        #     current_tensor = target_boundary[i, :, :].detach().cpu().numpy()
-        #     current_tensor = abs(current_tensor)
-        #     current_tensor = ((current_tensor - current_tensor.min()) / (current_tensor.max() - current_tensor.min()) * 255).astype(np.uint8)
-        #     tensor_color = cv2.applyColorMap(current_tensor, cv2.COLORMAP_VIRIDIS)
-        #     tensor_color_path = os.path.join('image_logs/GT', '{}.png'.format(i))
-        #     cv2.imwrite(tensor_color_path, tensor_color)
             
         # for i in range(target_80.shape[0]):
         #     current_tensor = target_80[i, :, :].detach().cpu().numpy()
@@ -457,52 +453,12 @@ class BoundaryLoss(nn.Module):
         #     tensor_color_path = os.path.join('image_logs/GT40', '{}.png'.format(i))
         #     cv2.imwrite(tensor_color_path, tensor_color)
         
-        # for i in range(target_boundary.shape[0]):
-        #     pos = i > 0.1
-        #     i = i*pos
-        #     current_tensor = target_boundary[i, :, :].detach().cpu().numpy()
-        #     current_tensor = ((current_tensor - current_tensor.min()) / (current_tensor.max() - current_tensor.min()) * 255).astype(np.uint8)
-        #     # current_tensor = cv2.Canny(current_tensor,50,100, 1)
-        #     tensor_color = cv2.applyColorMap(current_tensor, cv2.COLORMAP_VIRIDIS)
-        #     tensor_color_path = os.path.join('image_logs/GT', '{}.png'.format(i))
-        #     cv2.imwrite(tensor_color_path, tensor_color)
-            
-        # for i in range(target.shape[0]):
-        #     current_tensor = target[i, :, :].detach().cpu().numpy()
-        #     current_tensor = ((current_tensor - current_tensor.min()) / (current_tensor.max() - current_tensor.min()) * 255).astype(np.uint8)
-        #     # current_tensor = cv2.Canny(current_tensor,50,100, 1)
-        #     tensor_color = cv2.applyColorMap(current_tensor, cv2.COLORMAP_VIRIDIS)
-        #     tensor_color_path = os.path.join('image_logs/target', '{}.png'.format(i))
-        #     cv2.imwrite(tensor_color_path, tensor_color)
-            
-        # for i in range(input.shape[0]):
-        #     current_tensor = input[i, :, :].detach().cpu().numpy()
-        #     current_tensor = ((current_tensor - current_tensor.min()) / (current_tensor.max() - current_tensor.min()) * 255).astype(np.uint8)
-        #     # current_tensor = cv2.Canny(current_tensor,50,100, 1)
-        #     tensor_color = cv2.applyColorMap(current_tensor, cv2.COLORMAP_VIRIDIS)
-        #     tensor_color_path = os.path.join('image_logs/input', '{}.png'.format(i))
-        #     cv2.imwrite(tensor_color_path, tensor_color)
-        
-        #------------------------------------------------------------------------------------------------------------
-        # computer for downscale 2
-        
-        input2 = input_boundary_2.contiguous().view(input.size()[0], -1)
-        target2 = target_boundary_2.contiguous().view(target.size()[0], -1).float()
-        target2 = torch.abs(target2)
-        input2 = torch.abs(input2)
-        pos_index2 = (input2 >= 0.2)
-        # sum2 = torch.sum(pos_index2)
-        input2 = input2[pos_index2]
-        target2 = target2[pos_index2]
-        loss2 = self.loss2(input2, target2)
-        
         input = input_boundary.contiguous().view(input.size()[0], -1)
-        target = target_boundary.contiguous().view(target.size()[0], -1).float()
+        target = target_boundary.contiguous().view(target.size()[0], -1)
         target = torch.abs(target)
         input = torch.abs(input)
-        pos_index = (input >= 0.2)
-        # sum = torch.sum(pos_index)
-        input = input[pos_index]
-        target = target[pos_index]
+        # pos_index = (input >= 0.2)
+        # input = input[pos_index]
+        # target = target[pos_index]
         loss = self.loss(input, target)
-        return loss + loss2
+        return loss

@@ -9,6 +9,7 @@ import os
 from collections import OrderedDict
 import cv2
 import numpy as np
+import scipy
 
 import torch
 import torch.nn as nn
@@ -76,6 +77,8 @@ def evaluate(net: PlaneRecNet, dataset, during_training=False, eval_nums=-1):
         'box': [APDataObject()  for _ in iou_thresholds],
         'mask': [APDataObject() for _ in iou_thresholds]
     }
+    
+    hausdorff_distance = Hausdorff_Distance()
 
     try:
         # Main eval loop
@@ -103,7 +106,7 @@ def evaluate(net: PlaneRecNet, dataset, during_training=False, eval_nums=-1):
                 pred_masks = pred_masks.float()
                 gt_masks = gt_masks.float()
                 compute_segmentation_metrics(ap_data, gt_masks, gt_boxes, gt_classes, pred_masks, pred_boxes, pred_classes, pred_scores)
-            
+                # distance = hausdorff_distance(pred_masks, gt_masks)
             # First couple of images take longer because we're constructing the graph.
             # Since that's technically initialization, don't include those in the FPS calculations.
             if it > 1:
@@ -253,6 +256,29 @@ def compute_segmentation_metrics(ap_data, gt_masks, gt_boxes, gt_classes, pred_m
                     ap_obj.push(score_func(i), True)
                 
                 ap_obj.push(score_func(i), False)
+                
+                
+class Hausdorff_Distance(nn.Module):
+    def __init__(self):
+        super(Hausdorff_Distance, self).__init__()
+        w = 1
+        self.laplacian_kernel = torch.zeros((2*w+1, 2*w+1), dtype=torch.float32).reshape(1,1,2*w+1,2*w+1).requires_grad_(False) - 1
+        self.laplacian_kernel[0,0,w,w] = (2*w+1)*(2*w+1)-1
+        self.laplacian_kernel.cuda()
+   
+    def forward(self, pred_masks, gt_masks):
+        gt = []
+        pr = []
+        pred_boundary = abs(F.conv2d(pred_masks.unsqueeze(1), self.laplacian_kernel, padding=1).squeeze(1))
+        gt_boundary = abs(F.conv2d(gt_masks.unsqueeze(1), self.laplacian_kernel, padding=1).squeeze(1))
+        for i in range(pred_boundary.shape[0]):
+            candidate = np.where(pred_boundary[i].detach().cpu().numpy() > 0.2)
+            pr += [[x, y] for (x, y) in zip(candidate[0].tolist(), candidate[1].tolist())]
+        
+        for i in range(gt_boundary.shape[0]):
+            candidate = np.where(gt_boundary[i].detach().cpu().numpy() > 0.2)
+            gt += [[x, y] for (x, y) in zip(candidate[0].tolist(), candidate[1].tolist())]
+        return scipy.spatial.distance.directed_hausdorff(pr, gt) 
 
 class APDataObject:
     """
