@@ -435,6 +435,9 @@ class BoundaryLoss(nn.Module):
         if self.coarse_size:
             input = F.interpolate(input.unsqueeze(1), self.coarse_size, mode='bilinear', align_corners=False).squeeze(1)
             target = F.interpolate(target.unsqueeze(1), self.coarse_size, mode='bilinear', align_corners=False).squeeze(1)
+            target = target > 0.0
+            target = target.float()
+        
         
         target_boundary = F.conv2d(target.unsqueeze(1), self.laplacian_kernel, padding=1).squeeze(1)
         input_boundary = F.conv2d(input.unsqueeze(1), self.laplacian_kernel, padding=1).squeeze(1)
