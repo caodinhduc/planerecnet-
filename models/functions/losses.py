@@ -454,8 +454,8 @@ class BoundaryLoss(nn.Module):
         target = target_boundary.contiguous().view(target.size()[0], -1)
         target = torch.abs(target)
         input = torch.abs(input)
-        # pos_index = (input >= 0.2)
-        # input = input[pos_index]
-        # target = target[pos_index]
+        pos_index = (input >= 0.2)
+        input = input[pos_index]
+        target = target[pos_index]
         loss = self.loss(input, target)
         return loss
