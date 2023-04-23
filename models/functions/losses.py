@@ -444,17 +444,19 @@ class BoundaryLoss(nn.Module):
         
         
         # ------------------------------------------------------------------------------------------------------------
-        # import os
-        # import cv2
-        # import numpy as np
-            
-        # for i in range(target_80.shape[0]):
-        #     current_tensor = target_80[i, :, :].detach().cpu().numpy()
-        #     current_tensor = abs(current_tensor)
-        #     current_tensor = ((current_tensor - current_tensor.min()) / (current_tensor.max() - current_tensor.min()) * 255).astype(np.uint8)
-        #     tensor_color = cv2.applyColorMap(current_tensor, cv2.COLORMAP_VIRIDIS)
-        #     tensor_color_path = os.path.join('image_logs/GT40', '{}.png'.format(i))
-        #     cv2.imwrite(tensor_color_path, tensor_color)
+        # if self.coarse_size:
+        #     import os
+        #     import cv2
+        #     import numpy as np
+                
+        #     for i in range(target_boundary.shape[0]):
+        #         current_tensor = target_boundary[i, :, :].detach().cpu().numpy()
+        #         current_tensor = abs(current_tensor)
+        #         current_tensor = ((current_tensor - current_tensor.min()) / (current_tensor.max() - current_tensor.min()) * 255).astype(np.uint8)
+        #         tensor_color = cv2.applyColorMap(current_tensor, cv2.COLORMAP_VIRIDIS)
+        #         tensor_color_path = os.path.join('image_logs/GT40', '{}.png'.format(i))
+        #         cv2.imwrite(tensor_color_path, tensor_color)
+        #     print('')
         
         input = input_boundary.contiguous().view(input.size()[0], -1)
         target = target_boundary.contiguous().view(target.size()[0], -1)
