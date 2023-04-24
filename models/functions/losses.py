@@ -50,9 +50,7 @@ class PlaneRecNetLoss(nn.Module):
         self.depth_constraint_inst_loss = LavaLoss()
         # self.vnl = VNL_Loss((480,640))
         self.vnl = VNL_Loss((640,640))
-        self.boundary_loss = BoundaryLoss()
-        self.boundary_loss_80 = BoundaryLoss(coarse_size=(80, 80))
-        
+        self.boundary_loss = BoundaryLoss()     
 
     def forward(self, net, mask_preds, cate_preds, kernel_preds, depth_preds, gt_instances, gt_depths):
         """
@@ -79,6 +77,30 @@ class PlaneRecNetLoss(nn.Module):
                          for kernel_preds_level_img, grid_orders_level_img in
                          zip(kernel_preds_level, grid_orders_level)]
                         for kernel_preds_level, grid_orders_level in zip(kernel_preds, zip(*grid_order_list))]
+        
+        
+        # Generate the grradient mask
+        valid_mask = None
+        if self.dataset_name == 'ScanNet':
+            valid_mask = torch.zeros_like(gt_depths)
+            valid_mask[:, :, 20:460, 20:620] = 1
+        if self.dataset_name == 'Stanford 2D3DS':
+            # dilate the valid mask, to filter out invalid gradient values
+            valid_mask = gt_depths>0
+            dilate_kernel = torch.autograd.Variable(torch.ones((1, 1, 5, 5)).cuda()) 
+            invalid_mask = valid_mask.logical_not().float()
+            dilate_valid_mask = F.conv2d(invalid_mask, dilate_kernel, padding=2).bool().logical_not()
+            valid_mask = dilate_valid_mask
+        #batched_gt_scale_invariant_gradients = (compute_gradient_map(depth_preds, valid_mask) / torch.pow(depth_preds.clamp(min=self.depth_resolution), 2)).detach()
+        batched_gt_scale_invariant_gradients = compute_gradient_map(gt_depths, valid_mask, mode='sum') #/ torch.pow(gt_depths.clamp(min=self.depth_resolution), 2)
+        batched_gt_scale_invariant_gradients = batched_gt_scale_invariant_gradients.clamp(max=1e-2)
+        batched_gt_scale_invariant_gradients[batched_gt_scale_invariant_gradients<1e-4] = 0
+        
+        gradient_masks = F.interpolate(batched_gt_scale_invariant_gradients, (160, 160), mode='bilinear', align_corners=False)
+        ins_gradient_masks = []
+        for ins_labels_level in zip(*ins_label_list):
+            ins_gradient_masks.append(torch.cat([gradient_masks[i].repeat(ins_labels_level[i].shape[0], 1, 1) for i in range(len(ins_labels_level))], 0))
+ 
         # generate masks
         ins_pred_list = []
         ins_pred_batched_list = [torch.empty(0)]*len(mask_preds) 
@@ -123,16 +145,24 @@ class PlaneRecNetLoss(nn.Module):
 
 
         # Boundary loss
+    
+        # import os
+        # import cv2
+        # import numpy as np
+        # current_tensor = gradient_masks[0,0, :, :].detach().cpu().numpy()
+        # current_tensor = ((current_tensor - current_tensor.min()) / (current_tensor.max() - current_tensor.min()) * 255).astype(np.uint8)
+        # # current_tensor = cv2.Canny(current_tensor,50,100, 1)
+        # tensor_color = cv2.applyColorMap(current_tensor, cv2.COLORMAP_VIRIDIS)
+        # tensor_color_path = os.path.join('gradient.png')
+        # cv2.imwrite(tensor_color_path, tensor_color)
+        
         loss_boundary = []
-        loss_boundary_80 = []
-        for input, target in zip(ins_pred_list, ins_labels):
+        for input, target, gradient_mask in zip(ins_pred_list, ins_labels, ins_gradient_masks):
             if input is None:
                 continue
             input = torch.sigmoid(input)
-            loss_boundary.append(self.boundary_loss(input, target))
-            loss_boundary_80.append(self.boundary_loss_80(input, target))
+            loss_boundary.append(self.boundary_loss(input, target, gradient_mask))
         losses['bdr']  = torch.stack(loss_boundary).mean()
-        losses['bdr_80'] = torch.stack(loss_boundary_80).mean()
 
         # Classification Loss
         cate_labels = [
@@ -328,7 +358,7 @@ class LavaLoss(nn.Module):
         return loss
 
 @torch.no_grad()
-def compute_gradient_map(depth_map, valid_mask=None):
+def compute_gradient_map(depth_map, valid_mask=None, mode='square'):
     '''
     Compute gradient map from depth map with 3x3 sobel filter
     '''
@@ -348,7 +378,9 @@ def compute_gradient_map(depth_map, valid_mask=None):
     gx = F.conv2d(depth_map_padded, (1.0 / 8.0) * sobel_x, padding=0)
     gy = F.conv2d(depth_map_padded, (1.0 / 8.0) * sobel_y, padding=0)
     gradients = torch.pow(gx, 2) + torch.pow(gy, 2)
-    # gradients = abs(gx) + abs(gy)
+    
+    if mode=='sum':
+        gradients = abs(gx) + abs(gy)
 
     if valid_mask is not None:
         gradients = gradients * valid_mask
@@ -420,16 +452,17 @@ class RMSElogLoss(nn.Module):
 
 
 class BoundaryLoss(nn.Module):
-    def __init__(self, coarse_size=None):
+    def __init__(self, max_size=(160, 160)):
         super(BoundaryLoss, self).__init__()
         w = 1
         self.laplacian_kernel = torch.zeros((2*w+1, 2*w+1), dtype=torch.float32).reshape(1,1,2*w+1,2*w+1).requires_grad_(False) - 1
         self.laplacian_kernel[0,0,w,w] = (2*w+1)*(2*w+1)-1
         self.laplacian_kernel.cuda()
-        self.coarse_size = coarse_size
+        self.coarse_size = max_size
+        self.max_size= max_size
         self.loss = nn.MSELoss().cuda()
         
-    def forward(self, input, target):
+    def forward(self, input, target, gradient_mask):
         target = target.float()
         
         if self.coarse_size:
@@ -437,33 +470,56 @@ class BoundaryLoss(nn.Module):
             target = F.interpolate(target.unsqueeze(1), self.coarse_size, mode='bilinear', align_corners=False).squeeze(1)
             target = target > 0.0
             target = target.float()
-        
-        
         target_boundary = F.conv2d(target.unsqueeze(1), self.laplacian_kernel, padding=1).squeeze(1)
         input_boundary = F.conv2d(input.unsqueeze(1), self.laplacian_kernel, padding=1).squeeze(1)
-        
-        
         # ------------------------------------------------------------------------------------------------------------
-        # if self.coarse_size:
-        #     import os
-        #     import cv2
-        #     import numpy as np
-                
-        #     for i in range(target_boundary.shape[0]):
-        #         current_tensor = target_boundary[i, :, :].detach().cpu().numpy()
-        #         current_tensor = abs(current_tensor)
-        #         current_tensor = ((current_tensor - current_tensor.min()) / (current_tensor.max() - current_tensor.min()) * 255).astype(np.uint8)
-        #         tensor_color = cv2.applyColorMap(current_tensor, cv2.COLORMAP_VIRIDIS)
-        #         tensor_color_path = os.path.join('image_logs/GT40', '{}.png'.format(i))
-        #         cv2.imwrite(tensor_color_path, tensor_color)
-        #     print('')
+      
+        # import os
+        # import cv2
+        # import numpy as np
+            
+        # for i in range(target.shape[0]):
+        #     current_tensor = target[i, :, :].detach().cpu().numpy()
+        #     current_tensor = abs(current_tensor)
+        #     current_tensor = ((current_tensor - current_tensor.min()) / (current_tensor.max() - current_tensor.min()) * 255).astype(np.uint8)
+        #     tensor_color = cv2.applyColorMap(current_tensor, cv2.COLORMAP_VIRIDIS)
+        #     tensor_color_path = os.path.join('image_logs/target', '{}.png'.format(i))
+        #     cv2.imwrite(tensor_color_path, tensor_color)
+        # for i in range(target.shape[0]):
+        #     current_tensor = gradient_mask[i, :, :].detach().cpu().numpy()
+        #     current_tensor = abs(current_tensor)
+        #     current_tensor = ((current_tensor - current_tensor.min()) / (current_tensor.max() - current_tensor.min()) * 255).astype(np.uint8)
+        #     tensor_color = cv2.applyColorMap(current_tensor, cv2.COLORMAP_VIRIDIS)
+        #     tensor_color_path = os.path.join('image_logs/gradient', '{}.png'.format(i))
+        #     cv2.imwrite(tensor_color_path, tensor_color)
+        # print('')
+        mask_weight = torch.ones_like(target_boundary)
+        index = list(torch.where(abs(target_boundary[:, 1: self.max_size[0] - 1, 1: self.max_size[1] -1]) > 0.2))
+        index[1] += 1
+        index[2] += 1
+        weight = torch.std(torch.stack([gradient_mask[index[0], index[1], index[2]], gradient_mask[index[0], index[1], index[2] - 1], gradient_mask[index[0], index[1], index[2] + 1],
+                              gradient_mask[index[0], index[1] - 1, index[2]], gradient_mask[index[0], index[1] + 1, index[2]], 
+                              gradient_mask[index[0], index[1] + 1, index[2] + 1], gradient_mask[index[0], index[1] + 1, index[2] -1],
+                              gradient_mask[index[0], index[1] - 1, index[2] + 1], gradient_mask[index[0], index[1] - 1, index[2] -1]], -1), dim=-1)
+        # mean = torch.mean(weight)
+        weight = (weight - weight.min() ) / ( weight.max() - weight.min())
         
-        input = input_boundary.contiguous().view(input.size()[0], -1)
-        target = target_boundary.contiguous().view(target.size()[0], -1)
-        target = torch.abs(target)
-        input = torch.abs(input)
-        pos_index = (input >= 0.2)
-        input = input[pos_index]
-        target = target[pos_index]
+        c = torch.mean(mask_weight)
+        
+        mask_weight[index[0], index[1], index[2]] = 5 * weight
+        # input = input_boundary.contiguous().view(input.size()[0], -1)
+        # target = target_boundary.contiguous().view(target.size()[0], -1)
+        # print(torch.sum(weight))
+        s = torch.mean(mask_weight)
+        target = torch.abs(target_boundary)
+        input = torch.abs(input_boundary)
+        input_candidate = input > 0.2
+        target_candidate = target > 0.2
+        candidate = input_candidate + target_candidate
+        
+        input *= mask_weight
+        target *= mask_weight
+        input = input[candidate]
+        target = target[candidate]
         loss = self.loss(input, target)
         return loss
