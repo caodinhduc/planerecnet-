@@ -515,8 +515,8 @@ class BoundaryLoss(nn.Module):
         target_candidate = target > 0.2
         candidate = input_candidate + target_candidate
         
-        input *= mask_weight
-        target *= mask_weight
+        # input *= mask_weight
+        # target *= mask_weight
         input = input[candidate]
         target = target[candidate]
         loss = self.loss(input, target)
