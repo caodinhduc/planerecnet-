@@ -503,9 +503,9 @@ class BoundaryLoss(nn.Module):
                               gradient_mask[index[0], index[1] - 1, index[2] + 1], gradient_mask[index[0], index[1] - 1, index[2] -1]], -1), dim=-1)
         # mean = torch.mean(weight)
         weight = (weight - weight.min() ) / ( weight.max() - weight.min())
-        weight += 1
         
         mask_weight[index[0], index[1], index[2]] = 3 * weight
+        mask_weight[index[0], index[1], index[2]] += 1 
         # input = input_boundary.contiguous().view(input.size()[0], -1)
         # target = target_boundary.contiguous().view(target.size()[0], -1)
         # print(torch.sum(weight))
