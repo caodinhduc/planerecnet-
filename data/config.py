@@ -170,7 +170,7 @@ S2D3DS_dataset = dataset_base.copy({
     # select recorrected file for eval
     # 'eval_info':   '../../../data1/duccd/s2d3ds_plane_anno/recorrected_train.json',
     
-    # Training images and annotations
+    # # Training images and annotations
     # 'train_images': '../stanford/s2d3ds_plane_anno/pre/images/',
     # # 'train_info':   '../stanford/s2d3ds_plane_anno/pre/s2d3ds_train.json',
     # 'train_info':   '../stanford/recorrected_train.json',

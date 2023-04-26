@@ -502,22 +502,25 @@ class BoundaryLoss(nn.Module):
                               gradient_mask[index[0], index[1] + 1, index[2] + 1], gradient_mask[index[0], index[1] + 1, index[2] -1],
                               gradient_mask[index[0], index[1] - 1, index[2] + 1], gradient_mask[index[0], index[1] - 1, index[2] -1]], -1), dim=-1)
         # mean = torch.mean(weight)
+        # s = torch.sum(mask_weight[index[0], index[1], index[2]])
         weight = (weight - weight.min() ) / ( weight.max() - weight.min())
         
         mask_weight[index[0], index[1], index[2]] = 3 * weight
-        mask_weight[index[0], index[1], index[2]] += 1 
+        mask_weight[index[0], index[1], index[2]] += 0.5
         # input = input_boundary.contiguous().view(input.size()[0], -1)
         # target = target_boundary.contiguous().view(target.size()[0], -1)
         # print(torch.sum(weight))
         target = torch.abs(target_boundary)
         input = torch.abs(input_boundary)
         input_candidate = input > 0.2
-        target_candidate = target > 0.2
-        candidate = input_candidate + target_candidate
-        
-        # input *= mask_weight
-        # target *= mask_weight
-        input = input[candidate]
-        target = target[candidate]
+        # target_candidate = target > 0.2
+        # candidate = input_candidate + target_candidate
+        # s1 = torch.sum(mask_weight[index[0], index[1], index[2]])
+        # s2 = torch.sum(target_candidate)
+        # s3 = torch.sum(candidate)
+        input *= mask_weight
+        target *= mask_weight
+        input = input[input_candidate]
+        target = target[input_candidate]
         loss = self.loss(input, target)
         return loss
