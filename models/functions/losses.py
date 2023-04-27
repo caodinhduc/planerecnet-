@@ -417,7 +417,7 @@ class RMSElogLoss(nn.Module):
 
 
 class BoundaryLoss(nn.Module):
-    def __init__(self, coarse_size=None):
+    def __init__(self, coarse_size=(160, 160)):
         super(BoundaryLoss, self).__init__()
         w = 1
         self.laplacian_kernel = torch.zeros((2*w+1, 2*w+1), dtype=torch.float32).reshape(1,1,2*w+1,2*w+1).requires_grad_(False) - 1
@@ -432,30 +432,17 @@ class BoundaryLoss(nn.Module):
         if self.coarse_size:
             input = F.interpolate(input.unsqueeze(1), self.coarse_size, mode='bilinear', align_corners=False).squeeze(1)
             target = F.interpolate(target.unsqueeze(1), self.coarse_size, mode='bilinear', align_corners=False).squeeze(1)
-        
+            target = target > 0.0
+            target = target.float()
         target_boundary = F.conv2d(target.unsqueeze(1), self.laplacian_kernel, padding=1).squeeze(1)
         input_boundary = F.conv2d(input.unsqueeze(1), self.laplacian_kernel, padding=1).squeeze(1)
-        
-        
         # ------------------------------------------------------------------------------------------------------------
-        # import os
-        # import cv2
-        # import numpy as np
-            
-        # for i in range(target_80.shape[0]):
-        #     current_tensor = target_80[i, :, :].detach().cpu().numpy()
-        #     current_tensor = abs(current_tensor)
-        #     current_tensor = ((current_tensor - current_tensor.min()) / (current_tensor.max() - current_tensor.min()) * 255).astype(np.uint8)
-        #     tensor_color = cv2.applyColorMap(current_tensor, cv2.COLORMAP_VIRIDIS)
-        #     tensor_color_path = os.path.join('image_logs/GT40', '{}.png'.format(i))
-        #     cv2.imwrite(tensor_color_path, tensor_color)
+      
+        target = torch.abs(target_boundary)
+        input = torch.abs(input_boundary)
+        input_candidate = input > 0.2
         
-        input = input_boundary.contiguous().view(input.size()[0], -1)
-        target = target_boundary.contiguous().view(target.size()[0], -1)
-        target = torch.abs(target)
-        input = torch.abs(input)
-        pos_index = (input >= 0.2)
-        input = input[pos_index]
-        target = target[pos_index]
+        input = input[input_candidate]
+        target = target[input_candidate]
         loss = self.loss(input, target)
         return loss
