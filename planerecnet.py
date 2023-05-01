@@ -550,7 +550,7 @@ class SOLOv2MaskHead(nn.Module):
             nn.GroupNorm(32, self.num_masks),
             nn.ReLU(inplace=True)
         )
-        self.sablock = SABlock(128, 128)
+        self.sablock = SABlock(128, 32)
         self.conv1x1 = nn.Sequential(
             nn.Conv2d(128, 128, kernel_size=1, stride=1, padding=0)
             )
@@ -665,7 +665,7 @@ class Depth_Pred(nn.Module):
             nn.Conv2d(64, self.num_output_channels, kernel_size=3, stride=1, padding=0),
             nn.Softplus()
         )
-        self.sablock = SABlock(128, 128)
+        self.sablock = SABlock(128, 32)
         self.conv1x1 = nn.Sequential(
             nn.Conv2d(128, 128, kernel_size=1, stride=1, padding=0)
             )

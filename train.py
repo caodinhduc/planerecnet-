@@ -117,7 +117,7 @@ if args.batch_size // torch.cuda.device_count() < 6:
         print('Per-GPU batch size is less than the recommended limit for batch norm. Disabling batch norm.')
     cfg.freeze_bn = True
 
-loss_types = ['ins', 'lav', 'cat', 'dpt', 'pln', 'bdr']
+loss_types = ['ins', 'lav', 'cat', 'dpt', 'pln']
 
 if torch.cuda.is_available():
     torch.set_default_tensor_type('torch.cuda.FloatTensor')
@@ -156,7 +156,7 @@ class CustomDataParallel(nn.DataParallel):
     It should also be faster than the general case.
     
     """
-    def scatter(self, inputs, kwargs, device_ids=[1]):
+    def scatter(self, inputs, kwargs, device_ids=[0]):
         # More like scatter and data prep at the same time. The point is we prep the data in such a way
         # that no scatter is necessary, and there's no need to shuffle stuff around different GPUs.
         devices = ['cuda:{}'.format(device_ids[0])]

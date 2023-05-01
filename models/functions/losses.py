@@ -120,15 +120,15 @@ class PlaneRecNetLoss(nn.Module):
         losses['ins'] = loss_ins
 
 
-        # Boundary loss
-        loss_boundary = []
-        for input, target in zip(ins_pred_list, ins_labels):
-            if input is None:
-                continue
-            input = torch.sigmoid(input)
-            loss_boundary.append(self.boundary_loss(input, target))
-        loss_bdr_mean = torch.stack(loss_boundary).mean()
-        losses['bdr'] = loss_bdr_mean
+        # # Boundary loss
+        # loss_boundary = []
+        # for input, target in zip(ins_pred_list, ins_labels):
+        #     if input is None:
+        #         continue
+        #     input = torch.sigmoid(input)
+        #     loss_boundary.append(self.boundary_loss(input, target))
+        # loss_bdr_mean = torch.stack(loss_boundary).mean()
+        # losses['bdr'] = loss_bdr_mean
 
         # Classification Loss
         cate_labels = [
