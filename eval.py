@@ -261,7 +261,7 @@ def compute_segmentation_metrics(ap_data, gt_masks, gt_boxes, gt_classes, pred_m
                 
                 
 class Chamsfer_Distance(nn.Module):
-    def __init__(self, image_size=(640, 640)):
+    def __init__(self, image_size=(160, 160)):
         super(Chamsfer_Distance, self).__init__()
         w = 1
         self.laplacian_kernel = torch.zeros((2*w+1, 2*w+1), dtype=torch.float32).reshape(1,1,2*w+1,2*w+1).requires_grad_(False) - 1
@@ -270,10 +270,10 @@ class Chamsfer_Distance(nn.Module):
         self.image_size = image_size
    
     def forward(self, pred_masks, gt_masks):
-        gt = []
-        pr = []
-        # gt = torch.zeros(self.image_size, dtype=bool)
-        # pr = torch.zeros(self.image_size, dtype=bool)
+        # gt = []
+        # pr = []
+        gt = torch.zeros(self.image_size, dtype=bool)
+        pr = torch.zeros(self.image_size, dtype=bool)
         
         pred_masks = F.interpolate(pred_masks.unsqueeze(1), (160, 160), mode='bilinear', align_corners=False).squeeze(1)
         gt_masks = F.interpolate(gt_masks.unsqueeze(1), (160, 160), mode='bilinear', align_corners=False).squeeze(1)
@@ -281,12 +281,12 @@ class Chamsfer_Distance(nn.Module):
         pred_boundary = abs(F.conv2d(pred_masks.unsqueeze(1), self.laplacian_kernel, padding=1).squeeze(1))
         gt_boundary = abs(F.conv2d(gt_masks.unsqueeze(1), self.laplacian_kernel, padding=1).squeeze(1))
         
-        # pred_candidate = abs(pred_boundary) > 0.2
-        # gt_candidate = abs(gt_boundary) > 0.2
-        # for i in range(pred_candidate.shape[0]):
-        #     pr += pred_candidate[i]
-        # for i in range(gt_candidate.shape[0]):
-        #     gt += gt_candidate[i]
+        pred_candidate = abs(pred_boundary) > 0.2
+        gt_candidate = abs(gt_boundary) > 0.2
+        for i in range(pred_candidate.shape[0]):
+            pr += pred_candidate[i]
+        for i in range(gt_candidate.shape[0]):
+            gt += gt_candidate[i]
             
             
             
@@ -305,18 +305,19 @@ class Chamsfer_Distance(nn.Module):
         # tensor_color = cv2.applyColorMap(current_tensor, cv2.COLORMAP_VIRIDIS)
         # tensor_color_path = os.path.join('image_logs/pr.png')
         # cv2.imwrite(tensor_color_path, tensor_color)
-        # IoU = torch.sum(pr * gt)/torch.sum(pr + gt)
+        IoU = torch.sum(pr * gt)/torch.sum(pr + gt)
+        return IoU
         
-        for i in range(pred_boundary.shape[0]):
-            candidate = np.where(pred_boundary[i].detach().cpu().numpy() > 0.2)
-            pr += [[x, y] for (x, y) in zip(candidate[0].tolist(), candidate[1].tolist())]
+        # for i in range(pred_boundary.shape[0]):
+        #     candidate = np.where(pred_boundary[i].detach().cpu().numpy() > 0.2)
+        #     pr += [[x, y] for (x, y) in zip(candidate[0].tolist(), candidate[1].tolist())]
         
-        for i in range(gt_boundary.shape[0]):
-            candidate = np.where(gt_boundary[i].detach().cpu().numpy() > 0.2)
-            gt += [[x, y] for (x, y) in zip(candidate[0].tolist(), candidate[1].tolist())]
-        pr = torch.from_numpy(np.array(pr)).type(torch.FloatTensor)
-        gt = torch.from_numpy(np.array(gt)).type(torch.FloatTensor)
-        return torch.mean(torch.cdist(pr, gt, p=1))
+        # for i in range(gt_boundary.shape[0]):
+        #     candidate = np.where(gt_boundary[i].detach().cpu().numpy() > 0.2)
+        #     gt += [[x, y] for (x, y) in zip(candidate[0].tolist(), candidate[1].tolist())]
+        # pr = torch.from_numpy(np.array(pr)).type(torch.FloatTensor)
+        # gt = torch.from_numpy(np.array(gt)).type(torch.FloatTensor)
+        # return torch.mean(torch.cdist(pr, gt, p=1))
     
 class APDataObject:
     """
