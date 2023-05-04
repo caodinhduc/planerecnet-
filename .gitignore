@@ -140,3 +140,4 @@ weights/
 image_logs/
 *.json
 __pycache__
+inference/
