@@ -70,7 +70,7 @@ class PlaneAnnoDataset(data.Dataset):
         assert osp.exists(path), 'Image path does not exist: {}'.format(path)
 
         img = cv2.imread(path).astype(np.float32)
-        img = cv2.resize(img, (640, 480))
+        img = cv2.resize(img, (640, 640))
         height, width, _ = img.shape
 
         depth_path = self.get_depth_path(file_name)
@@ -132,7 +132,7 @@ class PlaneAnnoDataset(data.Dataset):
         img_id = self.ids[index]
         path = self.coco.loadImgs(img_id)[0]['file_name']
         img = cv2.imread(osp.join(self.root, path), cv2.IMREAD_COLOR)
-        img = cv2.resize(img, (640, 480))
+        img = cv2.resize(img, (640, 640))
         return img
     
     def pull_depth(self, index):

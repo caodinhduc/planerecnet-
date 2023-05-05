@@ -170,7 +170,7 @@ S2D3DS_dataset = dataset_base.copy({
 
     # Training images and annotations
     'train_images': '../../../data1/duccd/s2d3ds_plane_anno/pre/images/',
-    'train_info':   '../../../data1/duccd/s2d3ds_plane_anno/pre/s2d3ds_train.json',
+    'train_info':   '../../../data1/duccd/s2d3ds_plane_anno/splitted_s2d3ds_train.json',
 
     # Validation images and annotations.
     'valid_images': '../../../data1/duccd/s2d3ds_plane_anno/pre/images_val/',
@@ -180,15 +180,15 @@ S2D3DS_dataset = dataset_base.copy({
     'eval_info':   '../../../data1/duccd/s2d3ds_plane_anno/pre/s2d3ds_val.json',
     
     
-    'train_images': '../stanford/s2d3ds_plane_anno/pre/images/',
-    'train_info':   '../stanford/recorrected_train.json',
+    # 'train_images': '../stanford/s2d3ds_plane_anno/pre/images/',
+    # 'train_info':   '../stanford/recorrected_train.json',
 
-    # # Validation images and annotations.
-    'valid_images': '../stanford/s2d3ds_plane_anno/pre/images/',
-    'valid_info':   '../stanford/recorrected_train.json',
+    # # # Validation images and annotations.
+    # 'valid_images': '../stanford/s2d3ds_plane_anno/pre/images/',
+    # 'valid_info':   '../stanford/recorrected_train.json',
     
-    'eval_images': '../stanford/s2d3ds_plane_anno/pre/images/',
-    'eval_info':   '../stanford/recorrected_train.json',
+    # 'eval_images': '../stanford/s2d3ds_plane_anno/pre/images/',
+    # 'eval_info':   '../stanford/recorrected_train.json',
 
     # The ratio to convert depth pixel value to meter
     'depth_resolution': 1/512,
@@ -482,7 +482,7 @@ PlaneRecNet_base_config = Config(
         'solov2': solov2_base,
 
         # Loss Settings
-        'dice_weight': 3.0,
+        'dice_weight': 10.0,
         'focal_weight': 1.0,
         'depth_weight': 5.0,
         'use_lava_loss': False,
