@@ -472,6 +472,7 @@ class BoundaryLoss(nn.Module):
         self.laplacian_kernel = torch.zeros((2*w+1, 2*w+1), dtype=torch.float32).reshape(1,1,2*w+1,2*w+1).requires_grad_(False) - 1
         self.laplacian_kernel[0,0,w,w] = (2*w+1)*(2*w+1)-1
         self.laplacian_kernel.cuda()
+        self.max_size=(120, 160)
         self.loss = nn.MSELoss().cuda()
         
     def forward(self, input, target, gradient_mask):
