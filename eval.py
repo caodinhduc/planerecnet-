@@ -97,8 +97,11 @@ def evaluate(net: PlaneRecNet, dataset, during_training=False, eval_nums=-1):
             pred_masks, pred_boxes, pred_classes, pred_scores, pred_depth = [v for k, v in result.items()]
 
             gt_depth = gt_depth.cuda()
-            depth_error_per_frame = compute_depth_metrics(pred_depth, gt_depth, pred_masks, median_scaling=True, only_plane_areas=False)
-            infos.append(depth_error_per_frame)
+            try:
+                depth_error_per_frame = compute_depth_metrics(pred_depth, gt_depth, pred_masks, median_scaling=True, only_plane_areas=False)
+                infos.append(depth_error_per_frame)
+            except:
+                continue
 
             if pred_masks is not None:
                 pred_masks = pred_masks.float()
@@ -185,7 +188,7 @@ def compute_depth_metrics(pred_depth, gt_depth, pred_masks, median_scaling=True,
              ratio: median ration between pred_depth and gt_depth, if not median_scaling, ratio = 0
     """
     
-    plane_mask = torch.zeros((480, 640), dtype=torch.bool)
+    plane_mask = torch.zeros((640, 640), dtype=torch.bool)
     if only_plane_areas == True:
         for i in pred_masks:
             plane_mask += i
