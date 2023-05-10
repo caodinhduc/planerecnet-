@@ -120,15 +120,15 @@ class PlaneRecNetLoss(nn.Module):
         losses['ins'] = loss_ins
 
 
-        # # Boundary loss
-        # loss_boundary = []
-        # for input, target in zip(ins_pred_list, ins_labels):
-        #     if input is None:
-        #         continue
-        #     input = torch.sigmoid(input)
-        #     loss_boundary.append(self.boundary_loss(input, target))
-        # loss_bdr_mean = torch.stack(loss_boundary).mean()
-        # losses['bdr'] = loss_bdr_mean
+        # Boundary loss
+        loss_boundary = []
+        for input, target in zip(ins_pred_list, ins_labels):
+            if input is None:
+                continue
+            input = torch.sigmoid(input)
+            loss_boundary.append(self.boundary_loss(input, target))
+        loss_bdr_mean = torch.stack(loss_boundary).mean()
+        losses['bdr'] = loss_bdr_mean
 
         # Classification Loss
         cate_labels = [
@@ -154,35 +154,6 @@ class PlaneRecNetLoss(nn.Module):
         gt_depths = Variable(gt_depths, requires_grad=False)
         depth_preds = F.interpolate(depth_preds, scale_factor=2, mode='bilinear', align_corners=False)
         
-        #---------------------------------------------------------------------------------------------
-        # sobel_x = torch.Tensor([[1, 0, -1],
-        #                 [2, 0, -2],
-        #                 [1, 0, -1]])
-        # sobel_x = sobel_x.view((1, 1, 3, 3))
-        # sobel_x = torch.autograd.Variable(sobel_x.cuda())
-
-        # sobel_y = torch.Tensor([[1, 2, 1],
-        #                         [0, 0, 0],
-        #                         [-1, -2, -1]])
-        # sobel_y = sobel_y.view((1, 1, 3, 3))
-        # sobel_y = torch.autograd.Variable(sobel_y.cuda())
-        
-        # depth_map_padded = F.pad(gt_depths, pad=(1,1,1,1), mode='reflect') # Don't use zero padding mode, you know why.
-        # gx = F.conv2d(depth_map_padded, (1.0 / 8.0) * sobel_x, padding=0)
-        # gy = F.conv2d(depth_map_padded, (1.0 / 8.0) * sobel_y, padding=0)
-        # gradients = torch.pow(gx, 2) + torch.pow(gy, 2)
-        
-        # import os
-        # import cv2
-        # import numpy as np
-        # for i in range(gradients.shape[0]):
-        #     current_tensor = gradients[i, 0, :, :].detach().cpu().numpy()
-        #     current_tensor = ((current_tensor - current_tensor.min()) / (current_tensor.max() - current_tensor.min()) * 255).astype(np.uint8)
-        #     # current_tensor = cv2.Canny(current_tensor,50,100, 1)
-        #     tensor_color = cv2.applyColorMap(current_tensor, cv2.COLORMAP_VIRIDIS)
-        #     tensor_color_path = os.path.join('image_logs/GR', '{}.png'.format(i))
-        #     cv2.imwrite(tensor_color_path, tensor_color)
-        #---------------------------------------------------------------------------------------------
         
         valid_mask = (gt_depths > cfg.dataset.min_depth) # All ground truth >= min depth are considered as invalid/non-informative pixels
         gt_depths.clamp(max=cfg.dataset.max_depth)
@@ -411,85 +382,6 @@ class DiceLoss(nn.Module):
         return 1 - d
 
 
-class BoundaryLoss(nn.Module):
-    def __init__(self):
-        super(BoundaryLoss, self).__init__()
-        w = 1
-        self.laplacian_kernel = torch.zeros((2*w+1, 2*w+1), dtype=torch.float32).reshape(1,1,2*w+1,2*w+1).requires_grad_(False) - 1
-        self.laplacian_kernel[0,0,w,w] = (2*w+1)*(2*w+1)-1
-        self.laplacian_kernel.cuda()
-        self.loss = nn.MSELoss().cuda()
-        self.loss1 = nn.MSELoss().cuda()
-        
-    def forward(self, input, target):
-        target = target.float()
-        target_boundary = F.conv2d(target.unsqueeze(1), self.laplacian_kernel, padding=0).squeeze(1)
-        input_boundary = F.conv2d(input.unsqueeze(1), self.laplacian_kernel, padding=0).squeeze(1)
-        
-        # input_boundary_2 = F.interpolate(input_boundary.unsqueeze(1), scale_factor=0.5, mode='bilinear', align_corners=False).squeeze(1)
-        # target_boundary_2 = F.interpolate(target_boundary.unsqueeze(1), scale_factor=0.5, mode='bilinear', align_corners=False).squeeze(1)
-        
-        # ------------------------------------------------------------------------------------------------------------
-        # import os
-        # import cv2
-        # import numpy as np
-        # for i in range(input_boundary.shape[0]):
-        #     current_tensor = input_boundary[i, :, :].detach().cpu().numpy()
-        #     current_tensor = ((current_tensor - current_tensor.min()) / (current_tensor.max() - current_tensor.min()) * 255).astype(np.uint8)
-        #     # current_tensor = cv2.Canny(current_tensor,50,100, 1)
-        #     tensor_color = cv2.applyColorMap(current_tensor, cv2.COLORMAP_VIRIDIS)
-        #     tensor_color_path = os.path.join('image_logs/PR', '{}.png'.format(i))
-        #     cv2.imwrite(tensor_color_path, tensor_color)
-        
-        # for i in range(target_boundary.shape[0]):
-        #     pos = i > 0.1
-        #     i = i*pos
-        #     current_tensor = target_boundary[i, :, :].detach().cpu().numpy()
-        #     current_tensor = ((current_tensor - current_tensor.min()) / (current_tensor.max() - current_tensor.min()) * 255).astype(np.uint8)
-        #     # current_tensor = cv2.Canny(current_tensor,50,100, 1)
-        #     tensor_color = cv2.applyColorMap(current_tensor, cv2.COLORMAP_VIRIDIS)
-        #     tensor_color_path = os.path.join('image_logs/GT', '{}.png'.format(i))
-        #     cv2.imwrite(tensor_color_path, tensor_color)
-            
-        # for i in range(target.shape[0]):
-        #     current_tensor = target[i, :, :].detach().cpu().numpy()
-        #     current_tensor = ((current_tensor - current_tensor.min()) / (current_tensor.max() - current_tensor.min()) * 255).astype(np.uint8)
-        #     # current_tensor = cv2.Canny(current_tensor,50,100, 1)
-        #     tensor_color = cv2.applyColorMap(current_tensor, cv2.COLORMAP_VIRIDIS)
-        #     tensor_color_path = os.path.join('image_logs/target', '{}.png'.format(i))
-        #     cv2.imwrite(tensor_color_path, tensor_color)
-            
-        # for i in range(input.shape[0]):
-        #     current_tensor = input[i, :, :].detach().cpu().numpy()
-        #     current_tensor = ((current_tensor - current_tensor.min()) / (current_tensor.max() - current_tensor.min()) * 255).astype(np.uint8)
-        #     # current_tensor = cv2.Canny(current_tensor,50,100, 1)
-        #     tensor_color = cv2.applyColorMap(current_tensor, cv2.COLORMAP_VIRIDIS)
-        #     tensor_color_path = os.path.join('image_logs/input', '{}.png'.format(i))
-        #     cv2.imwrite(tensor_color_path, tensor_color)
-        
-        #------------------------------------------------------------------------------------------------------------
-        # computer for downscale 2
-        
-        # input2 = input_boundary_2.contiguous().view(input.size()[0], -1)
-        # target2 = target_boundary_2.contiguous().view(target.size()[0], -1).float()
-        # target2 = torch.abs(target2)
-        # input2 = torch.abs(input2)
-        # pos_index2 = (input2 >= 0.1)
-        # input2 = input2[pos_index2]
-        # target2 = target2[pos_index2]
-        
-        input = input_boundary.contiguous().view(input.size()[0], -1)
-        target = target_boundary.contiguous().view(target.size()[0], -1).float()
-        target = torch.abs(target)
-        input = torch.abs(input)
-        pos_index = (input >= 0.25)
-        input = input[pos_index]
-        target = target[pos_index]
-
-        loss = self.loss(input, target)
-        return loss
-
-
 class RMSElogLoss(nn.Module):
     def __init__(self, clamp_val=1e-9, reduction: str = "none"):
         super(RMSElogLoss, self).__init__()
@@ -513,4 +405,48 @@ class RMSElogLoss(nn.Module):
 
         return loss
 
+class BoundaryLoss(nn.Module):
+    def __init__(self, max_size=(160, 160)):
+        super(BoundaryLoss, self).__init__()
+        w = 1
+        self.laplacian_kernel = torch.zeros((2*w+1, 2*w+1), dtype=torch.float32).reshape(1,1,2*w+1,2*w+1).requires_grad_(False) - 1
+        self.laplacian_kernel[0,0,w,w] = (2*w+1)*(2*w+1)-1
+        self.laplacian_kernel.cuda()
+        self.max_size= max_size
+        self.loss = nn.MSELoss().cuda()
+        
+    def forward(self, input, target):
+        target = target.float()
+        
+        # if self.coarse_size:
+        #     input = F.interpolate(input.unsqueeze(1), self.coarse_size, mode='bilinear', align_corners=False).squeeze(1)
+        #     target = F.interpolate(target.unsqueeze(1), self.coarse_size, mode='bilinear', align_corners=False).squeeze(1)
+        #     target = target > 0.0
+        #     target = target.float()
+        target_boundary = F.conv2d(target.unsqueeze(1), self.laplacian_kernel, padding=1).squeeze(1)
+        input_boundary = F.conv2d(input.unsqueeze(1), self.laplacian_kernel, padding=1).squeeze(1)
+        # ------------------------------------------------------------------------------------------------------------
+        # mask_weight = torch.ones_like(target_boundary)
+        # index = list(torch.where(abs(target_boundary[:, 1: self.max_size[0] - 1, 1: self.max_size[1] -1]) > 0.2))
+        # index[1] += 1
+        # index[2] += 1
+        # weight = torch.std(torch.stack([gradient_mask[index[0], index[1], index[2]], gradient_mask[index[0], index[1], index[2] - 1], gradient_mask[index[0], index[1], index[2] + 1],
+        #                       gradient_mask[index[0], index[1] - 1, index[2]], gradient_mask[index[0], index[1] + 1, index[2]], 
+        #                       gradient_mask[index[0], index[1] + 1, index[2] + 1], gradient_mask[index[0], index[1] + 1, index[2] -1],
+        #                       gradient_mask[index[0], index[1] - 1, index[2] + 1], gradient_mask[index[0], index[1] - 1, index[2] -1]], -1), dim=-1)
+        # weight = (weight - weight.min() ) / ( weight.max() - weight.min())
+        
+        # mask_weight[index[0], index[1], index[2]] = 3 * weight
+        # mask_weight[index[0], index[1], index[2]] += 0.5
+        # ------------------------------------------------------------------------------------------------------------
 
+        target = torch.abs(target_boundary)
+        input = torch.abs(input_boundary)
+        input_candidate = input > 0.2
+        # adding if use DGBPL
+        # input *= mask_weight
+        # target *= mask_weight
+        input = input[input_candidate]
+        target = target[input_candidate]
+        loss = self.loss(input, target)
+        return loss
