@@ -112,7 +112,7 @@ dataset_base = Config({
 scannet_dataset = dataset_base.copy({
     'name': 'ScanNetDataset',
 
-    Training images and annotations
+    # Training images and annotations
     'train_images': '../../../data1/duccd/official/',
     'train_info':   '../../../data1/duccd/scannet_train.json',
 
