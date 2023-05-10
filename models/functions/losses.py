@@ -92,7 +92,7 @@ class PlaneRecNetLoss(nn.Module):
             dilate_valid_mask = F.conv2d(invalid_mask, dilate_kernel, padding=2).bool().logical_not()
             valid_mask = dilate_valid_mask
         #batched_gt_scale_invariant_gradients = (compute_gradient_map(depth_preds, valid_mask) / torch.pow(depth_preds.clamp(min=self.depth_resolution), 2)).detach()
-        batched_gt_scale_invariant_gradients = compute_gradient_map(gt_depths, valid_mask, mode='sum') #/ torch.pow(gt_depths.clamp(min=self.depth_resolution), 2)
+        batched_gt_scale_invariant_gradients = compute_gradient_map(gt_depths, valid_mask, mode='sum')# / torch.pow(gt_depths.clamp(min=self.depth_resolution), 2)
         batched_gt_scale_invariant_gradients = batched_gt_scale_invariant_gradients.clamp(max=1e-2)
         batched_gt_scale_invariant_gradients[batched_gt_scale_invariant_gradients<1e-4] = 0
         
@@ -148,15 +148,16 @@ class PlaneRecNetLoss(nn.Module):
 
         # Boundary loss
     
-        import os
-        import cv2
-        import numpy as np
-        current_tensor = gradient_masks[0,0, :, :].detach().cpu().numpy()
-        current_tensor = ((current_tensor - current_tensor.min()) / (current_tensor.max() - current_tensor.min()) * 255).astype(np.uint8)
-        # current_tensor = cv2.Canny(current_tensor,50,100, 1)
-        tensor_color = cv2.applyColorMap(current_tensor, cv2.COLORMAP_VIRIDIS)
-        tensor_color_path = os.path.join('gradient.png')
-        cv2.imwrite(tensor_color_path, tensor_color)
+        # import os
+        # import cv2
+        # import numpy as np
+        # # gradient_masks = F.interpolate(gradient_masks, (80, 80), mode='bilinear', align_corners=False)
+        # current_tensor = gradient_masks[0,0, :, :].detach().cpu().numpy()
+        # current_tensor = ((current_tensor - current_tensor.min()) / (current_tensor.max() - current_tensor.min()) * 255).astype(np.uint8)
+        # # current_tensor = cv2.Canny(current_tensor,50,100, 1)
+        # tensor_color = cv2.applyColorMap(current_tensor, cv2.COLORMAP_VIRIDIS)
+        # tensor_color_path = os.path.join('gradient.png')
+        # cv2.imwrite(tensor_color_path, tensor_color)
         
         loss_boundary = []
         for input, target, gradient_mask in zip(ins_pred_list, ins_labels, ins_gradient_masks):
