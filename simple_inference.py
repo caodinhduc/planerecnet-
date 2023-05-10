@@ -100,7 +100,8 @@ def display_on_frame(result, frame, mask_alpha=0.5, fps_str='', no_mask=False, n
                 score = pred_scores[j].detach().cpu().numpy()
 
                 if not no_box:
-                    cv2.rectangle(frame_numpy, (x1, y1), (x2, y2), color, 1)
+                    pass
+                    # cv2.rectangle(frame_numpy, (x1, y1), (x2, y2), color, 1)
                 
                 if not no_text:
                     _class = cfg.dataset.class_names[pred_classes[j].cpu().numpy()]
@@ -114,8 +115,8 @@ def display_on_frame(result, frame, mask_alpha=0.5, fps_str='', no_mask=False, n
                     text_pt = (x1, y1 + text_h + 1)
                     text_color = [255, 255, 255]
 
-                    cv2.rectangle(frame_numpy, (x1, y1),(x1 + text_w, y1 + text_h + 4), color, -1)
-                    cv2.putText(frame_numpy, text_str, text_pt, font_face,font_scale, text_color, font_thickness, cv2.LINE_AA)
+                    # cv2.rectangle(frame_numpy, (x1, y1),(x1 + text_w, y1 + text_h + 4), color, -1)
+                    # cv2.putText(frame_numpy, text_str, text_pt, font_face,font_scale, text_color, font_thickness, cv2.LINE_AA)
         if not no_text:
             score = pred_scores[j].detach().cpu().numpy()
             _class = cfg.dataset.class_names[pred_classes[j].cpu().numpy()]
@@ -130,10 +131,10 @@ def display_on_frame(result, frame, mask_alpha=0.5, fps_str='', no_mask=False, n
             text_pt = (x1, y1 + text_h + 1)
             text_color = [255, 255, 255]
 
-            cv2.rectangle(frame_numpy, (x1, y1),
-                        (x1 + text_w, y1 + text_h + 4), color, -1)
-            cv2.putText(frame_numpy, text_str, text_pt, font_face,
-                        font_scale, text_color, font_thickness, cv2.LINE_AA)
+            # cv2.rectangle(frame_numpy, (x1, y1),
+            #             (x1 + text_w, y1 + text_h + 4), color, -1)
+            # cv2.putText(frame_numpy, text_str, text_pt, font_face,
+            #             font_scale, text_color, font_thickness, cv2.LINE_AA)
                 
         return frame_numpy, pred_depth.cpu().numpy()
     else:
@@ -159,11 +160,28 @@ def inference_image(net: PlaneRecNet, path: str, save_path: str = None, depth_mo
         name, ext = os.path.splitext(path)
         save_path = name + '_seg' + ext
         depth_path = name + '_dep.png'
+        nor_path = name + '_nor.png'
     else:
         name, ext = os.path.splitext(save_path)
         depth_path = name + '_dep.png'
+        nor_path = name + '_nor.png'
         
     cv2.imwrite(save_path, blended_frame)
+    
+    zx = cv2.Sobel(depth, cv2.CV_64F, 1, 0, ksize=7)
+    zy = cv2.Sobel(depth, cv2.CV_64F, 0, 1, ksize=7)
+    # zy, zx = np.gradient(depth) 
+    normal = np.dstack((-zx, -zy, np.ones_like(depth)))
+    n = np.linalg.norm(normal, axis=2)
+    normal[:, :, 0] /= n
+    normal[:, :, 1] /= n
+    normal[:, :, 2] /= n
+
+    # offset and rescale values to be in 0-255
+    normal += 1
+    normal /= 2
+    normal *= 255
+    cv2.imwrite(nor_path, normal[:, :, ::-1])
 
     if depth_mode == 'colored':
         vmin = np.percentile(depth, 1)
