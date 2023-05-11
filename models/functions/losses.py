@@ -338,7 +338,7 @@ class LavaLoss(nn.Module):
         return loss
 
 @torch.no_grad()
-def compute_gradient_map(depth_map, valid_mask=None):
+def compute_gradient_map(depth_map, valid_mask=None, mode='square'):
     '''
     Compute gradient map from depth map with 3x3 sobel filter
     '''
@@ -358,6 +358,9 @@ def compute_gradient_map(depth_map, valid_mask=None):
     gx = F.conv2d(depth_map_padded, (1.0 / 8.0) * sobel_x, padding=0)
     gy = F.conv2d(depth_map_padded, (1.0 / 8.0) * sobel_y, padding=0)
     gradients = torch.pow(gx, 2) + torch.pow(gy, 2)
+
+    if mode=='sum':
+        gradients = abs(gx) + abs(gy)
 
     if valid_mask is not None:
         gradients = gradients * valid_mask
