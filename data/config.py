@@ -123,17 +123,17 @@ scannet_dataset = dataset_base.copy({
     'eval_images': '../../../data1/duccd/official/',
     'eval_info':   '../../../data1/duccd/scannet_eval.json',
 
-    # # Training images and annotations
-    # 'train_images': '../scannet/official/',
-    # 'train_info':   'scannet_val.json',
+    # Training images and annotations
+    'train_images': '../scannet/official/',
+    'train_info':   'scannet_val.json',
 
-    # # Validation images and annotations.
-    # 'valid_images': '../scannet/official/',
-    # 'valid_info':   'scannet_val.json',
+    # Validation images and annotations.
+    'valid_images': '../scannet/official/',
+    'valid_info':   'scannet_val.json',
 
-    # # Evaluation images and annotations.
-    # 'eval_images': '../scannet/official/',
-    # 'eval_info':   'scannet_eval.json',
+    # Evaluation images and annotations.
+    'eval_images': '../scannet/official/',
+    'eval_info':   'scannet_eval.json',
     
 
     # A list of names for each of you classes.
