@@ -80,7 +80,8 @@ def evaluate(net: PlaneRecNet, dataset, during_training=False, eval_nums=-1):
     RI = []
     VOI = []
     SC = []
-
+    boundary_evaluator = Boundary_Eval()
+    distance = []
     try:
         # Main eval loop
         for it, image_idx in enumerate(dataset_indices):
@@ -107,12 +108,12 @@ def evaluate(net: PlaneRecNet, dataset, during_training=False, eval_nums=-1):
                 pred_masks = pred_masks.float()
                 gt_masks = gt_masks.float()
                 compute_segmentation_metrics(ap_data, gt_masks, gt_boxes, gt_classes, pred_masks, pred_boxes, pred_classes, pred_scores)
-                
-                valid_mask = pred_depth > 1e-4
-                ri, voi, sc = evaluateMasksTensor(pred_masks, gt_masks, valid_mask)
-                RI.append(float(ri))
-                VOI.append(float(voi))
-                SC.append(float(sc))
+                # distance.append(boundary_evaluator(pred_masks, gt_masks))
+                # valid_mask = pred_depth > 1e-4
+                # ri, voi, sc = evaluateMasksTensor(pred_masks, gt_masks, valid_mask)
+                # RI.append(float(ri))
+                # VOI.append(float(voi))
+                # SC.append(float(sc))
             # First couple of images take longer because we're constructing the graph.
             # Since that's technically initialization, don't include those in the FPS calculations.
             if it > 1:
@@ -127,6 +128,7 @@ def evaluate(net: PlaneRecNet, dataset, during_training=False, eval_nums=-1):
                 progress_bar.set_val(it+1)
                 print('\rProcessing Images  %s %6d / %6d (%5.2f%%)    %5.2f fps        '
                       % (repr(progress_bar), it+1, eval_nums, progress, fps), end='')
+        # print('IoU: ', torch.mean(torch.stack(distance)))
         calc_map(ap_data)
         infos = np.asarray(infos, dtype=np.double)
         infos = infos.sum(axis=0)/infos.shape[0]
@@ -138,10 +140,9 @@ def evaluate(net: PlaneRecNet, dataset, during_training=False, eval_nums=-1):
             depth_metrics[6], infos[6], depth_metrics[7], infos[7]
         ))
         
-        print("ri: ", np.mean(RI))
-        print("VOI: ", np.mean(VOI))
-        print("SC: ", np.mean(SC))
-
+        # print("ri: ", np.mean(RI))
+        # print("VOI: ", np.mean(VOI))
+        # print("SC: ", np.mean(SC))
     except KeyboardInterrupt:
         print('Stopping...')
 
@@ -277,6 +278,67 @@ def compute_segmentation_metrics(ap_data, gt_masks, gt_boxes, gt_classes, pred_m
                 
                 ap_obj.push(score_func(i), False)
 
+
+class Boundary_Eval(nn.Module):
+    def __init__(self, image_size=(640, 640)):
+        super(Boundary_Eval, self).__init__()
+        w = 1
+        self.laplacian_kernel = torch.zeros((2*w+1, 2*w+1), dtype=torch.float32).reshape(1,1,2*w+1,2*w+1).requires_grad_(False) - 1
+        self.laplacian_kernel[0,0,w,w] = (2*w+1)*(2*w+1)-1
+        self.laplacian_kernel.cuda()
+        self.image_size = image_size
+   
+    def forward(self, pred_masks, gt_masks):
+        # gt = []
+        # pr = []
+        IoU = []
+        gt = torch.zeros(self.image_size, dtype=bool)
+        pr = torch.zeros(self.image_size, dtype=bool)
+        
+        # pred_masks = F.interpolate(pred_masks.unsqueeze(1), (160, 160), mode='bilinear', align_corners=False).squeeze(1)
+        # gt_masks = F.interpolate(gt_masks.unsqueeze(1), (160, 160), mode='bilinear', align_corners=False).squeeze(1)
+        
+        pred_boundary = abs(F.conv2d(pred_masks.unsqueeze(1), self.laplacian_kernel, padding=1).squeeze(1))
+        gt_boundary = abs(F.conv2d(gt_masks.unsqueeze(1), self.laplacian_kernel, padding=1).squeeze(1))
+        
+        pred_candidate = pred_boundary > 0.1
+        gt_candidate =  gt_boundary > 0.1
+        for i in range(gt_candidate.shape[0]):
+            gt += gt_candidate[i]
+        for i in range(pred_candidate.shape[0]):
+            pr += pred_candidate[i]
+        return torch.sum(gt * pr)/torch.sum(gt + pr)
+            
+            
+            
+        # import os
+        # import cv2
+        # import numpy as np
+            
+        # current_tensor = gt.type(torch.FloatTensor).detach().cpu().numpy()
+        # current_tensor = ((current_tensor - current_tensor.min()) / (current_tensor.max() - current_tensor.min()) * 255).astype(np.uint8)
+        # tensor_color = cv2.applyColorMap(current_tensor, cv2.COLORMAP_VIRIDIS)
+        # tensor_color_path = os.path.join('image_logs/gt.png')
+        # cv2.imwrite(tensor_color_path, tensor_color)
+        
+        # current_tensor = pr.type(torch.FloatTensor).detach().cpu().numpy()
+        # current_tensor = ((current_tensor - current_tensor.min()) / (current_tensor.max() - current_tensor.min()) * 255).astype(np.uint8)
+        # tensor_color = cv2.applyColorMap(current_tensor, cv2.COLORMAP_VIRIDIS)
+        # tensor_color_path = os.path.join('image_logs/pr.png')
+        # cv2.imwrite(tensor_color_path, tensor_color)
+        # return torch.mean(torch.stack(IoU))
+        # for i in range(pred_boundary.shape[0]):
+        #     candidate = np.where(pred_boundary[i].detach().cpu().numpy() > 0.2)
+        #     pr += [[x, y] for (x, y) in zip(candidate[0].tolist(), candidate[1].tolist())]
+        
+        # for i in range(gt_boundary.shape[0]):
+        #     candidate = np.where(gt_boundary[i].detach().cpu().numpy() > 0.2)
+        #     gt += [[x, y] for (x, y) in zip(candidate[0].tolist(), candidate[1].tolist())]
+        # pr = torch.from_numpy(np.array(pr)).type(torch.FloatTensor)
+        # gt = torch.from_numpy(np.array(gt)).type(torch.FloatTensor)
+        # return torch.mean(torch.cdist(pr, gt, p=1))
+
+
 class APDataObject:
     """
     Stores all the information necessary to calculate the AP for one IoU and one class.
@@ -378,6 +440,7 @@ def calc_map(ap_data):
     all_maps = {k: {j: round(u, 2) for j, u in v.items()}
                 for k, v in all_maps.items()}
     return all_maps
+
 
 def evaluateMasksTensor(predMasks, gtMasks, valid_mask, printInfo=False):
     gtMasks = torch.cat([gtMasks, torch.clamp(1 - gtMasks.sum(0, keepdim=True), min=0)], dim=0)
