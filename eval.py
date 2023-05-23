@@ -77,9 +77,9 @@ def evaluate(net: PlaneRecNet, dataset, during_training=False, eval_nums=-1):
         'mask': [APDataObject() for _ in iou_thresholds]
     }
 
-    RI = []
-    VOI = []
-    SC = []
+    # RI = []
+    # VOI = []
+    # SC = []
 
     try:
         # Main eval loop
@@ -105,11 +105,11 @@ def evaluate(net: PlaneRecNet, dataset, during_training=False, eval_nums=-1):
                 gt_masks = gt_masks.float()
                 compute_segmentation_metrics(ap_data, gt_masks, gt_boxes, gt_classes, pred_masks, pred_boxes, pred_classes, pred_scores)
                 
-                valid_mask = pred_depth > 1e-4
-                ri, voi, sc = evaluateMasksTensor(pred_masks, gt_masks, valid_mask)
-                RI.append(float(ri))
-                VOI.append(float(voi))
-                SC.append(float(sc))
+                # valid_mask = pred_depth > 1e-4
+                # ri, voi, sc = evaluateMasksTensor(pred_masks, gt_masks, valid_mask)
+                # RI.append(float(ri))
+                # VOI.append(float(voi))
+                # SC.append(float(sc))
             # First couple of images take longer because we're constructing the graph.
             # Since that's technically initialization, don't include those in the FPS calculations.
             if it > 1:
@@ -135,9 +135,9 @@ def evaluate(net: PlaneRecNet, dataset, during_training=False, eval_nums=-1):
             depth_metrics[6], infos[6], depth_metrics[7], infos[7]
         ))
         
-        print("ri: ", np.mean(RI))
-        print("VOI: ", np.mean(VOI))
-        print("SC: ", np.mean(SC))
+        # print("ri: ", np.mean(RI))
+        # print("VOI: ", np.mean(VOI))
+        # print("SC: ", np.mean(SC))
 
     except KeyboardInterrupt:
         print('Stopping...')
