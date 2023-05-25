@@ -188,8 +188,8 @@ S2D3DS_dataset = dataset_base.copy({
     # 'valid_images': '../stanford/s2d3ds_plane_anno/pre/images/',
     # 'valid_info':   '../stanford/recorrected_train.json',
     
-    # 'eval_images': '../stanford/s2d3ds_plane_anno/pre/images/',
-    # 'eval_info':   '../stanford/recorrected_train.json',
+    'eval_images': '../stanford/s2d3ds_plane_anno/pre/images/',
+    'eval_info':   '../stanford/recorrected_train.json',
 
     # The ratio to convert depth pixel value to meter
     'depth_resolution': 1/512,
