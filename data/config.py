@@ -125,15 +125,15 @@ scannet_dataset = dataset_base.copy({
 
     # Training images and annotations
     'train_images': '../scannet/official/',
-    'train_info':   'scannet_val.json',
+    'train_info':   'checkgrad_scannet.json',
 
     # Validation images and annotations.
     'valid_images': '../scannet/official/',
-    'valid_info':   'scannet_val.json',
+    'valid_info':   'checkgrad_scannet.json',
 
     # Evaluation images and annotations.
     'eval_images': '../scannet/official/',
-    'eval_info':   'scannet_eval.json',
+    'eval_info':   'checkgrad_scannet.json',
     
 
     # A list of names for each of you classes.

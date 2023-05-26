@@ -65,7 +65,6 @@ class PlaneAnnoDataset(data.Dataset):
         else:
             target = []
         file_name = self.coco.loadImgs(img_id)[0]['file_name']
-        # print(file_name)
         path = osp.join(self.root, file_name)
         assert osp.exists(path), 'Image path does not exist: {}'.format(path)
 
