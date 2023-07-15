@@ -77,11 +77,11 @@ def evaluate(net: PlaneRecNet, dataset, during_training=False, eval_nums=-1):
         'mask': [APDataObject() for _ in iou_thresholds]
     }
 
-    RI = []
-    VOI = []
-    SC = []
-    boundary_evaluator = Boundary_Eval()
-    distance = []
+    # RI = []
+    # VOI = []
+    # SC = []
+    # boundary_evaluator = Boundary_Eval()
+    # distance = []
     try:
         # Main eval loop
         for it, image_idx in enumerate(dataset_indices):
@@ -99,7 +99,7 @@ def evaluate(net: PlaneRecNet, dataset, during_training=False, eval_nums=-1):
 
             gt_depth = gt_depth.cuda()
             try:
-                depth_error_per_frame = compute_depth_metrics(pred_depth, gt_depth, pred_masks, median_scaling=True, only_plane_areas=False)
+                depth_error_per_frame = compute_depth_metrics(pred_depth, gt_depth, gt_masks, median_scaling=True, only_plane_area=True)
                 infos.append(depth_error_per_frame)
             except:
                 continue
@@ -177,8 +177,14 @@ def tensorborad_visual_log(net: PlaneRecNet, dataset, writer: SummaryWriter, ite
     except KeyboardInterrupt:
         print('Stopping...')
 
+def _estimate_plane_area(gt_masks):
+    plane_mask = torch.zeros((640, 640), dtype=torch.bool)
+    for i in range(gt_masks.size()[0]):
+        tem = gt_masks[i] > 0
+        plane_mask += tem
+    return plane_mask
 
-def compute_depth_metrics(pred_depth, gt_depth, pred_masks, median_scaling=True, only_plane_areas=False):
+def compute_depth_metrics(pred_depth, gt_depth, gt_masks, median_scaling=True, only_plane_area=False):
     """
     Computation of error metrics between predicted and ground truth depths.
     Prediction and ground turth need to be converted to the same unit e.g. [meter].
@@ -188,20 +194,16 @@ def compute_depth_metrics(pred_depth, gt_depth, pred_masks, median_scaling=True,
     Returns: abs_rel, sq_rel, rmse, rmse_log, a1, a2, a3: depth metrics
              ratio: median ration between pred_depth and gt_depth, if not median_scaling, ratio = 0
     """
-    
-    plane_mask = torch.zeros((640, 640), dtype=torch.bool)
-    if only_plane_areas == True:
-        for i in pred_masks:
-            plane_mask += i
-    
+    plane_mask = _estimate_plane_area(gt_masks)
     _, H, W = gt_depth.shape
     pred_depth_flat = pred_depth.squeeze().view(-1, H*W)
     gt_depth_flat = gt_depth.squeeze().view(-1, H*W)
     
     valid_mask = (gt_depth_flat > 0.5).logical_and(pred_depth_flat > 0.5)
-    if only_plane_areas:
-        plane_mask = plane_mask.squeeze().view(-1, H*W)
-        valid_mask = valid_mask * plane_mask
+    
+    plane_mask = plane_mask.squeeze().view(-1, H*W)
+    valid_mask = valid_mask * plane_mask
+    
     pred_depths_flat = pred_depth_flat[valid_mask]
     gt_depths_flat = gt_depth_flat[valid_mask]
 
