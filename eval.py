@@ -77,11 +77,7 @@ def evaluate(net: PlaneRecNet, dataset, during_training=False, eval_nums=-1):
         'mask': [APDataObject() for _ in iou_thresholds]
     }
 
-    # RI = []
-    # VOI = []
-    # SC = []
-    # boundary_evaluator = Boundary_Eval()
-    # distance = []
+
     try:
         # Main eval loop
         for it, image_idx in enumerate(dataset_indices):
@@ -107,7 +103,7 @@ def evaluate(net: PlaneRecNet, dataset, during_training=False, eval_nums=-1):
             if pred_masks is not None:
                 pred_masks = pred_masks.float()
                 gt_masks = gt_masks.float()
-                compute_segmentation_metrics(ap_data, gt_masks, gt_boxes, gt_classes, pred_masks, pred_boxes, pred_classes, pred_scores)
+                # compute_segmentation_metrics(ap_data, gt_masks, gt_boxes, gt_classes, pred_masks, pred_boxes, pred_classes, pred_scores)
                 # distance.append(boundary_evaluator(pred_masks, gt_masks))
                 # valid_mask = pred_depth > 1e-4
                 # ri, voi, sc = evaluateMasksTensor(pred_masks, gt_masks, valid_mask)
@@ -128,8 +124,8 @@ def evaluate(net: PlaneRecNet, dataset, during_training=False, eval_nums=-1):
                 progress_bar.set_val(it+1)
                 print('\rProcessing Images  %s %6d / %6d (%5.2f%%)    %5.2f fps        '
                       % (repr(progress_bar), it+1, eval_nums, progress, fps), end='')
-        # print('IoU: ', torch.mean(torch.stack(distance)))
-        calc_map(ap_data)
+
+        # calc_map(ap_data)
         infos = np.asarray(infos, dtype=np.double)
         infos = infos.sum(axis=0)/infos.shape[0]
         print()
@@ -140,9 +136,6 @@ def evaluate(net: PlaneRecNet, dataset, during_training=False, eval_nums=-1):
             depth_metrics[6], infos[6], depth_metrics[7], infos[7]
         ))
         
-        # print("ri: ", np.mean(RI))
-        # print("VOI: ", np.mean(VOI))
-        # print("SC: ", np.mean(SC))
     except KeyboardInterrupt:
         print('Stopping...')
 
@@ -177,11 +170,19 @@ def tensorborad_visual_log(net: PlaneRecNet, dataset, writer: SummaryWriter, ite
     except KeyboardInterrupt:
         print('Stopping...')
 
-def _estimate_plane_area(gt_masks):
+def _estimate_boundary_area(gt_masks):
+    w = 1
+    laplacian_kernel = torch.zeros((2*w+1, 2*w+1), dtype=torch.float32).reshape(1,1,2*w+1,2*w+1).requires_grad_(False) - 1
+    laplacian_kernel[0,0,w,w] = (2*w+1)*(2*w+1)-1
+    laplacian_kernel.cuda()
+    
+    
+    gt_masks = F.conv2d(gt_masks.float().unsqueeze(1), laplacian_kernel, padding=1).squeeze(1)
     plane_mask = torch.zeros((640, 640), dtype=torch.bool)
     for i in range(gt_masks.size()[0]):
-        tem = gt_masks[i] > 0
+        tem = gt_masks[i] > 0.3
         plane_mask += tem
+    # print(torch.sum(plane_mask))
     return plane_mask
 
 def compute_depth_metrics(pred_depth, gt_depth, gt_masks, median_scaling=True, only_plane_area=False):
@@ -194,7 +195,7 @@ def compute_depth_metrics(pred_depth, gt_depth, gt_masks, median_scaling=True, o
     Returns: abs_rel, sq_rel, rmse, rmse_log, a1, a2, a3: depth metrics
              ratio: median ration between pred_depth and gt_depth, if not median_scaling, ratio = 0
     """
-    plane_mask = _estimate_plane_area(gt_masks)
+    plane_mask = _estimate_boundary_area(gt_masks)
     _, H, W = gt_depth.shape
     pred_depth_flat = pred_depth.squeeze().view(-1, H*W)
     gt_depth_flat = gt_depth.squeeze().view(-1, H*W)
