@@ -95,7 +95,7 @@ def evaluate(net: PlaneRecNet, dataset, during_training=False, eval_nums=-1):
 
             gt_depth = gt_depth.cuda()
             try:
-                depth_error_per_frame = compute_depth_metrics(pred_depth, gt_depth, gt_masks, median_scaling=True, only_plane_area=True)
+                depth_error_per_frame = compute_depth_metrics(pred_depth, gt_depth, gt_masks, median_scaling=True, only_plane_area=False)
                 infos.append(depth_error_per_frame)
             except:
                 continue
@@ -104,12 +104,7 @@ def evaluate(net: PlaneRecNet, dataset, during_training=False, eval_nums=-1):
                 pred_masks = pred_masks.float()
                 gt_masks = gt_masks.float()
                 # compute_segmentation_metrics(ap_data, gt_masks, gt_boxes, gt_classes, pred_masks, pred_boxes, pred_classes, pred_scores)
-                # distance.append(boundary_evaluator(pred_masks, gt_masks))
-                # valid_mask = pred_depth > 1e-4
-                # ri, voi, sc = evaluateMasksTensor(pred_masks, gt_masks, valid_mask)
-                # RI.append(float(ri))
-                # VOI.append(float(voi))
-                # SC.append(float(sc))
+                
             # First couple of images take longer because we're constructing the graph.
             # Since that's technically initialization, don't include those in the FPS calculations.
             if it > 1:
@@ -195,15 +190,17 @@ def compute_depth_metrics(pred_depth, gt_depth, gt_masks, median_scaling=True, o
     Returns: abs_rel, sq_rel, rmse, rmse_log, a1, a2, a3: depth metrics
              ratio: median ration between pred_depth and gt_depth, if not median_scaling, ratio = 0
     """
-    plane_mask = _estimate_boundary_area(gt_masks)
+    if only_plane_area:
+        plane_mask = _estimate_boundary_area(gt_masks)
     _, H, W = gt_depth.shape
     pred_depth_flat = pred_depth.squeeze().view(-1, H*W)
     gt_depth_flat = gt_depth.squeeze().view(-1, H*W)
     
     valid_mask = (gt_depth_flat > 0.5).logical_and(pred_depth_flat > 0.5)
     
-    plane_mask = plane_mask.squeeze().view(-1, H*W)
-    valid_mask = valid_mask * plane_mask
+    if only_plane_area:
+        plane_mask = plane_mask.squeeze().view(-1, H*W)
+        valid_mask = valid_mask * plane_mask
     
     pred_depths_flat = pred_depth_flat[valid_mask]
     gt_depths_flat = gt_depth_flat[valid_mask]
@@ -280,66 +277,6 @@ def compute_segmentation_metrics(ap_data, gt_masks, gt_boxes, gt_classes, pred_m
                     ap_obj.push(score_func(i), True)
                 
                 ap_obj.push(score_func(i), False)
-
-
-class Boundary_Eval(nn.Module):
-    def __init__(self, image_size=(640, 640)):
-        super(Boundary_Eval, self).__init__()
-        w = 1
-        self.laplacian_kernel = torch.zeros((2*w+1, 2*w+1), dtype=torch.float32).reshape(1,1,2*w+1,2*w+1).requires_grad_(False) - 1
-        self.laplacian_kernel[0,0,w,w] = (2*w+1)*(2*w+1)-1
-        self.laplacian_kernel.cuda()
-        self.image_size = image_size
-   
-    def forward(self, pred_masks, gt_masks):
-        # gt = []
-        # pr = []
-        IoU = []
-        gt = torch.zeros(self.image_size, dtype=bool)
-        pr = torch.zeros(self.image_size, dtype=bool)
-        
-        # pred_masks = F.interpolate(pred_masks.unsqueeze(1), (160, 160), mode='bilinear', align_corners=False).squeeze(1)
-        # gt_masks = F.interpolate(gt_masks.unsqueeze(1), (160, 160), mode='bilinear', align_corners=False).squeeze(1)
-        
-        pred_boundary = abs(F.conv2d(pred_masks.unsqueeze(1), self.laplacian_kernel, padding=1).squeeze(1))
-        gt_boundary = abs(F.conv2d(gt_masks.unsqueeze(1), self.laplacian_kernel, padding=1).squeeze(1))
-        
-        pred_candidate = pred_boundary > 0.1
-        gt_candidate =  gt_boundary > 0.1
-        for i in range(gt_candidate.shape[0]):
-            gt += gt_candidate[i]
-        for i in range(pred_candidate.shape[0]):
-            pr += pred_candidate[i]
-        return torch.sum(gt * pr)/torch.sum(gt + pr)
-            
-            
-            
-        # import os
-        # import cv2
-        # import numpy as np
-            
-        # current_tensor = gt.type(torch.FloatTensor).detach().cpu().numpy()
-        # current_tensor = ((current_tensor - current_tensor.min()) / (current_tensor.max() - current_tensor.min()) * 255).astype(np.uint8)
-        # tensor_color = cv2.applyColorMap(current_tensor, cv2.COLORMAP_VIRIDIS)
-        # tensor_color_path = os.path.join('image_logs/gt.png')
-        # cv2.imwrite(tensor_color_path, tensor_color)
-        
-        # current_tensor = pr.type(torch.FloatTensor).detach().cpu().numpy()
-        # current_tensor = ((current_tensor - current_tensor.min()) / (current_tensor.max() - current_tensor.min()) * 255).astype(np.uint8)
-        # tensor_color = cv2.applyColorMap(current_tensor, cv2.COLORMAP_VIRIDIS)
-        # tensor_color_path = os.path.join('image_logs/pr.png')
-        # cv2.imwrite(tensor_color_path, tensor_color)
-        # return torch.mean(torch.stack(IoU))
-        # for i in range(pred_boundary.shape[0]):
-        #     candidate = np.where(pred_boundary[i].detach().cpu().numpy() > 0.2)
-        #     pr += [[x, y] for (x, y) in zip(candidate[0].tolist(), candidate[1].tolist())]
-        
-        # for i in range(gt_boundary.shape[0]):
-        #     candidate = np.where(gt_boundary[i].detach().cpu().numpy() > 0.2)
-        #     gt += [[x, y] for (x, y) in zip(candidate[0].tolist(), candidate[1].tolist())]
-        # pr = torch.from_numpy(np.array(pr)).type(torch.FloatTensor)
-        # gt = torch.from_numpy(np.array(gt)).type(torch.FloatTensor)
-        # return torch.mean(torch.cdist(pr, gt, p=1))
 
 
 class APDataObject:
