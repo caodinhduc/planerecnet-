@@ -134,6 +134,7 @@ dmypy.json
 
 # logs
 .idea/
+inference/
 logs/
 .vscode/
 weights/
