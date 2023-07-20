@@ -165,10 +165,10 @@ S2D3DS_dataset = dataset_base.copy({
     'valid_images': '../../../data1/duccd/s2d3ds_plane_anno/pre/images_val/',
     'valid_info':   '../../../data1/duccd/s2d3ds_plane_anno/pre/s2d3ds_val.json',
     
-    'eval_images': '../../../data1/duccd/s2d3ds_plane_anno/pre/images_val/',
-    'eval_info':   '../../../data1/duccd/s2d3ds_plane_anno/pre/s2d3ds_val.json',
+    'eval_images': '../../../data1/duccd/s2d3ds_plane_anno/pre/images/',
+    # 'eval_info':   '../../../data1/duccd/s2d3ds_plane_anno/pre/s2d3ds_val.json',
     # select recorrected file for eval
-    # 'eval_info':   '../../../data1/duccd/s2d3ds_plane_anno/recorrected_train.json',
+    'eval_info':   '../../../data1/duccd/s2d3ds_plane_anno/recorrected_train.json',
     
     # # Training images and annotations
     # 'train_images': '../stanford/s2d3ds_plane_anno/pre/images/',
