@@ -103,7 +103,7 @@ def evaluate(net: PlaneRecNet, dataset, during_training=False, eval_nums=-1):
             if pred_masks is not None:
                 pred_masks = pred_masks.float()
                 gt_masks = gt_masks.float()
-                # compute_segmentation_metrics(ap_data, gt_masks, gt_boxes, gt_classes, pred_masks, pred_boxes, pred_classes, pred_scores)
+                compute_segmentation_metrics(ap_data, gt_masks, gt_boxes, gt_classes, pred_masks, pred_boxes, pred_classes, pred_scores)
                 
             # First couple of images take longer because we're constructing the graph.
             # Since that's technically initialization, don't include those in the FPS calculations.
@@ -119,7 +119,6 @@ def evaluate(net: PlaneRecNet, dataset, during_training=False, eval_nums=-1):
                 progress_bar.set_val(it+1)
                 print('\rProcessing Images  %s %6d / %6d (%5.2f%%)    %5.2f fps        '
                       % (repr(progress_bar), it+1, eval_nums, progress, fps), end='')
-
         # calc_map(ap_data)
         infos = np.asarray(infos, dtype=np.double)
         infos = infos.sum(axis=0)/infos.shape[0]
@@ -175,7 +174,7 @@ def _estimate_boundary_area(gt_masks):
     gt_masks = F.conv2d(gt_masks.float().unsqueeze(1), laplacian_kernel, padding=1).squeeze(1)
     plane_mask = torch.zeros((640, 640), dtype=torch.bool)
     for i in range(gt_masks.size()[0]):
-        tem = gt_masks[i] > 0.3
+        tem = gt_masks[i] > 0.2
         plane_mask += tem
     # print(torch.sum(plane_mask))
     return plane_mask
